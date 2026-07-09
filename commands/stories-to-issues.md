@@ -1,19 +1,19 @@
 ---
-description: "User Stories aus spec.md als GitLab Issues erstellen"
+description: "Create user stories from spec.md as GitLab issues"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# User Stories als GitLab Issues erstellen
+# Create user stories as GitLab issues
 
-Erstelle für jede User Story in `spec.md` ein übergeordnetes GitLab Issue.
+Create a parent GitLab issue for each user story in `spec.md`.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature-Verzeichnis mit `spec.md` ist vorhanden
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
+- Feature directory with `spec.md` is present
 
 ## User Input
 
@@ -21,95 +21,95 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Feature-Verzeichnis ermitteln
+### Step 1: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln. Das Feature-Verzeichnis enthält `spec.md`.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory. The feature directory contains `spec.md`.
 
-Falls kein Feature-Verzeichnis gefunden wird, informiere den Benutzer und brich ab.
+If no feature directory is found, inform the user and abort.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-Folgende Werte werden benötigt:
-- `GITLAB_URL` - URL des GitLab-Servers
-- `GITLAB_PROJECT` - Projekt-Pfad
+The following values are needed:
+- `GITLAB_URL` - URL of the GitLab server
+- `GITLAB_PROJECT` - project path
 - Labels: `spec-kit`, `user-story`
-- `GITLAB_FEATURE_TO_MILESTONE` - ob Feature als Milestone gemappt wird
+- `GITLAB_FEATURE_TO_MILESTONE` - whether the feature is mapped to a milestone
 
-Falls `feature_to_milestone: true`, ermittle den Feature-Namen aus dem Feature-Verzeichnis (Verzeichnisname) und stelle sicher, dass ein entsprechender Milestone in GitLab existiert:
+If `feature_to_milestone: true`, determine the feature name from the feature directory (directory name) and make sure a corresponding milestone exists in GitLab:
 
 ```bash
 MILESTONE_TITLE="$(glab_ensure_milestone "$(get_feature_name "$FEATURE_DIR")")"
 ```
 
-### Step 3: spec.md lesen und User Stories extrahieren
+### Step 3: Read spec.md and extract user stories
 
-Lies die Datei `spec.md` im Feature-Verzeichnis. Extrahiere alle User Stories. User Stories sind typischerweise in diesem Format:
+Read the `spec.md` file in the feature directory. Extract all user stories. User stories are typically in this format:
 
 ```markdown
 ## User Stories
 
-### US1: Story-Titel [P1]
-Als <Rolle> möchte ich <Funktion>, damit <Nutzen>.
+### US1: Story title [P1]
+As a <role> I want <capability>, so that <benefit>.
 
-**Akzeptanzkriterien:**
-- Kriterium 1
-- Kriterium 2
+**Acceptance criteria:**
+- Criterion 1
+- Criterion 2
 
-### US2: Story-Titel [P2]
+### US2: Story title [P2]
 ...
 ```
 
-Extrahiere für jede Story:
-- **Story-ID**: z.B. `US1`
-- **Titel**: z.B. "Story-Titel"
-- **Priority**: z.B. `P1`
-- **Beschreibung**: Die User Story im "Als... möchte ich... damit..."-Format
-- **Akzeptanzkriterien**: Liste der Kriterien
+Extract for each story:
+- **Story ID**: e.g. `US1`
+- **Title**: e.g. "Story title"
+- **Priority**: e.g. `P1`
+- **Description**: the user story in "As a... I want... so that..." format
+- **Acceptance criteria**: list of criteria
 
-### Step 4: Idempotenz prüfen
+### Step 4: Check idempotency
 
-Lies die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml` (falls vorhanden). Überspringe Stories, die dort bereits eine GitLab Issue-Nummer haben.
+Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present). Skip stories that already have a GitLab issue number there.
 
-### Step 5: GitLab Issues erstellen
+### Step 5: Create GitLab issues
 
-Für jede noch nicht erstellte Story:
+For each story not yet created:
 
-1. **Labels zusammenstellen:**
-   - Immer: `spec-kit`, `user-story`
-   - Bei gesetzter Priority: `priority::1` (für P1), `priority::2` (für P2) etc.
+1. **Assemble labels:**
+   - Always: `spec-kit`, `user-story`
+   - If priority is set: `priority::1` (for P1), `priority::2` (for P2), etc.
 
-2. **Issue-Beschreibung formatieren:**
+2. **Format the issue description:**
    ```markdown
-   **Story-ID:** US1
+   **Story ID:** US1
    **Priority:** P1
 
    ## User Story
-   Als <Rolle> möchte ich <Funktion>, damit <Nutzen>.
+   As a <role> I want <capability>, so that <benefit>.
 
-   ## Akzeptanzkriterien
-   - [ ] Kriterium 1
-   - [ ] Kriterium 2
+   ## Acceptance Criteria
+   - [ ] Criterion 1
+   - [ ] Criterion 2
    ```
 
-3. **Issue erstellen** via `glab`:
+3. **Create the issue** via `glab`:
    ```bash
    glab issue create \
      --repo "$GITLAB_PROJECT" \
-     --title "US1: Story-Titel" \
-     --description "<formatierte Beschreibung>" \
+     --title "US1: Story title" \
+     --description "<formatted description>" \
      --label "spec-kit,user-story,priority::1" \
      --milestone "$MILESTONE_TITLE" \
      --yes
    ```
 
-   Den `--milestone`-Parameter nur setzen, wenn `feature_to_milestone: true` und `MILESTONE_TITLE` gesetzt ist. Nutze `glab_create_issue` mit dem 5. Parameter für den Milestone.
+   Only set the `--milestone` parameter if `feature_to_milestone: true` and `MILESTONE_TITLE` is set. Use `glab_create_issue` with the 5th parameter for the milestone.
 
-4. **Issue-URL und Nummer** aus dem Output extrahieren.
+4. **Extract the issue URL and number** from the output.
 
-5. **Mit Feature-Issue verlinken:**
-   Falls `feature:` in `.gitlab-mapping.yml` gesetzt ist, verlinke das neu erstellte Story-Issue mit dem Feature-Issue:
+5. **Link to the feature issue:**
+   If `feature:` is set in `.gitlab-mapping.yml`, link the newly created story issue to the feature issue:
    ```bash
    FEATURE_MAPPING="$(read_feature_mapping "$MAPPING_PATH")"
    if [[ -n "$FEATURE_MAPPING" ]]; then
@@ -118,9 +118,9 @@ Für jede noch nicht erstellte Story:
    fi
    ```
 
-### Step 6: Mapping-Datei aktualisieren
+### Step 6: Update the mapping file
 
-Schreibe/aktualisiere die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml`:
+Write/update the mapping file `FEATURE_DIR/.gitlab-mapping.yml`:
 
 ```yaml
 stories:
@@ -129,10 +129,10 @@ stories:
 tasks: {}
 ```
 
-### Step 7: Zusammenfassung
+### Step 7: Summary
 
-Zeige eine Übersicht:
-- Anzahl erstellte Story-Issues
-- Anzahl übersprungene Stories (bereits vorhanden)
-- Links zu den erstellten Issues
-- Hinweis: "Führe `/speckit.gitlab.tasks-to-issues` aus, um Tasks mit diesen Stories zu verlinken."
+Show an overview:
+- Number of story issues created
+- Number of stories skipped (already present)
+- Links to the created issues
+- Note: "Run `/speckit.gitlab.tasks-to-issues` to link tasks with these stories."

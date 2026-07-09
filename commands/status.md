@@ -1,19 +1,19 @@
 ---
-description: "Status von GitLab Issues in tasks.md updaten und Übersicht anzeigen"
+description: "Update the status of GitLab issues in tasks.md and show an overview"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# GitLab Issue-Status synchronisieren
+# Sync GitLab issue status
 
-Aktualisiere den Status der Tasks in `tasks.md` basierend auf dem aktuellen GitLab Issue-Status und zeige eine Übersicht.
+Update the status of the tasks in `tasks.md` based on the current GitLab issue status and show an overview.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature-Verzeichnis mit `tasks.md` und `.gitlab-mapping.yml` vorhanden
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
+- Feature directory with `tasks.md` and `.gitlab-mapping.yml` is present
 
 ## User Input
 
@@ -21,69 +21,69 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Feature-Verzeichnis ermitteln
+### Step 1: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
 
-Falls kein Feature-Verzeichnis gefunden wird, informiere den Benutzer und brich ab.
+If no feature directory is found, inform the user and abort.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-### Step 3: Mapping-Datei laden
+### Step 3: Load the mapping file
 
-Lies die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml`. Diese enthält die Zuordnung von Task-IDs zu GitLab Issue-Nummern.
+Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml`. This contains the mapping of task IDs to GitLab issue numbers.
 
-Falls keine Mapping-Datei existiert, prüfe `tasks.md` auf `<!-- gitlab:#123 -->` Kommentare und baue daraus eine temporäre Zuordnung.
+If no mapping file exists, check `tasks.md` for `<!-- gitlab:#123 -->` comments and build a temporary mapping from those.
 
-Falls weder Mapping-Datei noch Kommentare vorhanden sind:
-- Informiere den Benutzer, dass zuerst `/speckit.gitlab.tasks-to-issues` ausgeführt werden muss
-- Brich ab
+If neither a mapping file nor comments are present:
+- Inform the user that `/speckit.gitlab.tasks-to-issues` must be run first
+- Abort
 
-### Step 4: Status jedes Issues abfragen
+### Step 4: Query the status of each issue
 
-Für jede Issue-Nummer aus der Mapping-Datei:
+For each issue number in the mapping file:
 
 ```bash
-glab issue view <issue-nummer> --repo "$GITLAB_PROJECT" --output json
+glab issue view <issue-number> --repo "$GITLAB_PROJECT" --output json
 ```
 
-Extrahiere:
-- **Status**: `opened` oder `closed`
-- **Labels**: Aktuelle Labels
-- **Assignee**: Zugewiesene Person (falls vorhanden)
-- **Updated at**: Letztes Update-Datum
+Extract:
+- **Status**: `opened` or `closed`
+- **Labels**: current labels
+- **Assignee**: assigned person (if any)
+- **Updated at**: last update date
 
-### Step 5: tasks.md aktualisieren
+### Step 5: Update tasks.md
 
-Für jeden Task mit zugeordnetem GitLab Issue:
+For each task with an assigned GitLab issue:
 
-1. **Geschlossenes Issue** → Setze `[x]` in tasks.md
-2. **Offenes Issue** → Setze `[ ]` in tasks.md
+1. **Closed issue** → set `[x]` in tasks.md
+2. **Open issue** → set `[ ]` in tasks.md
 
-Nur tatsächliche Änderungen vornehmen (keine unnötigen Schreibvorgänge).
+Only make actual changes (avoid unnecessary writes).
 
-### Step 6: Übersicht anzeigen
+### Step 6: Show the overview
 
-Falls ein Feature-Issue in der Mapping-Datei vorhanden ist (`feature:` Eintrag), rufe dessen Status ab und zeige ihn zuerst an:
+If a feature issue is present in the mapping file (a `feature:` entry), fetch its status and show it first:
 
 ```bash
 FEATURE_MAPPING="$(read_feature_mapping "$MAPPING_PATH")"
 if [[ -n "$FEATURE_MAPPING" ]]; then
   FEATURE_ISSUE_NUMBER="$(extract_feature_issue_number "$FEATURE_MAPPING")"
-  # Issue-Details abrufen via glab_view_issue
+  # Fetch issue details via glab_view_issue
 fi
 ```
 
-Zeige eine formatierte Tabelle:
+Show a formatted table:
 
 ```
 Feature: #232 - user-authentication (Open)
 URL: https://gitlab.example.com/.../issues/232
 ================================================
 
-GitLab Issue-Status für Feature: <feature-name>
+GitLab issue status for feature: <feature-name>
 ================================================
 
 | Task  | GitLab  | Status      | Assignee    |
@@ -92,22 +92,22 @@ GitLab Issue-Status für Feature: <feature-name>
 | T002  | #43     | 🔄 Open    | @other      |
 | T003  | #44     | 🔄 Open    | -           |
 
-Zusammenfassung:
-  Offen:      2
-  Geschlossen: 1
-  Gesamt:      3
-  Fortschritt: 33%
+Summary:
+  Open:      2
+  Closed:    1
+  Total:     3
+  Progress:  33%
 
 Stories:
 | Story | GitLab  | Status      |
 |-------|---------|-------------|
 | US1   | #10     | 🔄 Open    |
 
-Letzte Aktualisierung: <aktuelles Datum/Uhrzeit>
+Last updated: <current date/time>
 ```
 
-### Step 7: Bidirektionale Warnung
+### Step 7: Bidirectional warning
 
-Falls es Diskrepanzen gibt (z.B. Task in tasks.md als `[x]` markiert, aber GitLab Issue ist noch offen):
-- Zeige eine Warnung mit den betroffenen Tasks
-- Frage den Benutzer, ob der GitLab-Status oder der lokale Status gelten soll
+If there are discrepancies (e.g. a task marked `[x]` in tasks.md but the GitLab issue is still open):
+- Show a warning with the affected tasks
+- Ask the user whether the GitLab status or the local status should take precedence

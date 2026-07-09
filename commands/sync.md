@@ -1,19 +1,19 @@
 ---
-description: "GitLab Issues in spec-kit Dateien importieren und synchronisieren"
+description: "Import and sync GitLab issues into spec-kit files"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# GitLab Issues synchronisieren
+# Sync GitLab issues
 
-Synchronisiere GitLab Issues mit den lokalen spec-kit Dateien (`tasks.md`).
+Sync GitLab issues with the local spec-kit files (`tasks.md`).
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature-Verzeichnis mit `tasks.md` ist vorhanden
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
+- Feature directory with `tasks.md` is present
 
 ## User Input
 
@@ -21,19 +21,19 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Feature-Verzeichnis ermitteln
+### Step 1: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
 
-Falls kein Feature-Verzeichnis gefunden wird, informiere den Benutzer und brich ab.
+If no feature directory is found, inform the user and abort.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-### Step 3: Feature-Issue und Issues von GitLab holen
+### Step 3: Fetch the feature issue and issues from GitLab
 
-Falls ein Feature-Issue in der Mapping-Datei vorhanden ist (`feature:` Eintrag), rufe dessen aktuellen Status ab:
+If a feature issue is present in the mapping file (a `feature:` entry), fetch its current status:
 
 ```bash
 FEATURE_MAPPING="$(read_feature_mapping "$MAPPING_PATH")"
@@ -43,67 +43,67 @@ if [[ -n "$FEATURE_MAPPING" ]]; then
 fi
 ```
 
-Lade alle Issues mit dem `spec-kit` Label aus dem konfigurierten GitLab-Projekt:
+Load all issues with the `spec-kit` label from the configured GitLab project:
 
 ```bash
-# Alle Issues mit spec-kit Label (offen und geschlossen)
+# All issues with the spec-kit label (open and closed)
 glab issue list --repo "$GITLAB_PROJECT" --label "spec-kit" --state all --output json
 ```
 
-Parse die JSON-Ausgabe und extrahiere für jedes Issue:
-- **Issue-Nummer**: z.B. `#42`
-- **Titel**: z.B. "T001: Task-Beschreibung"
-- **Status**: `opened` oder `closed`
-- **Labels**: Alle Labels des Issues
-- **URL**: Web-URL des Issues
+Parse the JSON output and extract for each issue:
+- **Issue number**: e.g. `#42`
+- **Title**: e.g. "T001: Task description"
+- **Status**: `opened` or `closed`
+- **Labels**: all labels of the issue
+- **URL**: web URL of the issue
 
-### Step 4: Mapping-Datei laden
+### Step 4: Load the mapping file
 
-Lies die bestehende Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml` (falls vorhanden).
+Read the existing mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present).
 
-### Step 5: tasks.md aktualisieren
+### Step 5: Update tasks.md
 
-Für jedes Issue, das in der Mapping-Datei oder in `tasks.md` (via `<!-- gitlab:#123 -->` Kommentar) referenziert wird:
+For each issue referenced in the mapping file or in `tasks.md` (via a `<!-- gitlab:#123 -->` comment):
 
-1. **Geschlossene Issues**: Setze die Checkbox auf `[x]`
+1. **Closed issues**: set the checkbox to `[x]`
    ```
-   - [x] T001 [P1] [US1] Task-Beschreibung <!-- gitlab:#42 -->
-   ```
-
-2. **Offene Issues**: Setze die Checkbox auf `[ ]`
-   ```
-   - [ ] T002 [P2] [US1] Andere Task-Beschreibung <!-- gitlab:#43 -->
+   - [x] T001 [P1] [US1] Task description <!-- gitlab:#42 -->
    ```
 
-### Step 6: Neue Issues importieren (optional)
-
-Falls der Benutzer `--import` als Argument übergeben hat oder bestätigt:
-
-Für jedes GitLab Issue mit `spec-kit` Label, das noch NICHT in `tasks.md` steht:
-
-1. Ermittle die Task-ID aus dem Issue-Titel (z.B. "T001" aus "T001: Beschreibung")
-2. Falls keine Task-ID im Titel: Generiere die nächste freie Task-ID
-3. Ermittle Priority aus Labels (z.B. `priority::1` → `P1`)
-4. Ermittle Story-Referenz aus Labels (z.B. `story::US1` → `US1`)
-5. Füge den Task am Ende von `tasks.md` hinzu:
+2. **Open issues**: set the checkbox to `[ ]`
    ```
-   - [ ] T099 [P2] [US3] Importierte Task-Beschreibung <!-- gitlab:#99 -->
+   - [ ] T002 [P2] [US1] Other task description <!-- gitlab:#43 -->
    ```
 
-### Step 7: Mapping-Datei aktualisieren
+### Step 6: Import new issues (optional)
 
-Aktualisiere die Mapping-Datei mit allen neuen Zuordnungen.
+If the user passed `--import` as an argument or confirms it:
 
-### Step 8: Zusammenfassung
+For each GitLab issue with the `spec-kit` label that is NOT yet in `tasks.md`:
 
-Falls ein Feature-Issue vorhanden ist, zeige dessen Status zuerst:
+1. Determine the task ID from the issue title (e.g. "T001" from "T001: Description")
+2. If there's no task ID in the title: generate the next free task ID
+3. Determine the priority from labels (e.g. `priority::1` → `P1`)
+4. Determine the story reference from labels (e.g. `story::US1` → `US1`)
+5. Append the task at the end of `tasks.md`:
+   ```
+   - [ ] T099 [P2] [US3] Imported task description <!-- gitlab:#99 -->
+   ```
+
+### Step 7: Update the mapping file
+
+Update the mapping file with all new assignments.
+
+### Step 8: Summary
+
+If a feature issue is present, show its status first:
 ```
 Feature: #232 - user-authentication (Open)
 ```
 
-Zeige eine Übersicht:
-- Feature-Issue Status (falls vorhanden)
-- Anzahl aktualisierte Tasks (Status geändert)
-- Anzahl neu importierte Tasks (falls --import)
-- Anzahl unveränderte Tasks
-- Eventuelle Konflikte oder Warnungen
+Show an overview:
+- Feature issue status (if present)
+- Number of tasks updated (status changed)
+- Number of tasks newly imported (if --import)
+- Number of tasks unchanged
+- Any conflicts or warnings

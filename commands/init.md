@@ -1,17 +1,17 @@
 ---
-description: "GitLab-Konfiguration interaktiv einrichten"
+description: "Interactively set up the GitLab configuration"
 scripts:
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# GitLab-Konfiguration einrichten
+# Set up the GitLab configuration
 
-Richte die GitLab-Integration interaktiv ein, indem alle nötigen Konfigurationswerte abgefragt und in die Config-Datei geschrieben werden.
+Interactively sets up the GitLab integration by asking for all necessary configuration values and writing them to the config file.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert
-- spec-kit GitLab Extension ist installiert (`specify extension add --dev ~/spec-kit-gitlab/`)
+- `glab` CLI is installed
+- spec-kit GitLab extension is installed (`specify extension add --dev ~/spec-kit-gitlab/`)
 
 ## User Input
 
@@ -19,102 +19,102 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Prüfen ob glab CLI verfügbar ist
+### Step 1: Check whether the glab CLI is available
 
-Prüfe ob `glab` installiert ist:
+Check whether `glab` is installed:
 
 ```bash
 command -v glab
 ```
 
-Falls nicht vorhanden, informiere den Benutzer:
+If not present, inform the user:
 - macOS: `brew install glab`
-- Linux: siehe https://gitlab.com/gitlab-org/cli
+- Linux: see https://gitlab.com/gitlab-org/cli
 
-### Step 2: Bestehende Konfiguration prüfen
+### Step 2: Check for an existing configuration
 
-Prüfe ob bereits eine Konfigurationsdatei existiert unter `.specify/extensions/gitlab/gitlab-config.yml`.
+Check whether a configuration file already exists at `.specify/extensions/gitlab/gitlab-config.yml`.
 
-Falls ja, lies die bestehenden Werte aus und zeige sie dem Benutzer an. Frage ob er sie aktualisieren oder beibehalten möchte.
+If so, read the existing values and show them to the user. Ask whether they want to update or keep them.
 
-### Step 3: GitLab-URL abfragen
+### Step 3: Ask for the GitLab URL
 
-Frage den Benutzer nach der GitLab-Server URL:
+Ask the user for the GitLab server URL:
 
-> **GitLab-Server URL?**
-> z.B. `https://gitlab.example.com` oder `https://gitlab.moselwal.io`
+> **GitLab server URL?**
+> e.g. `https://gitlab.example.com` or `https://gitlab.moselwal.io`
 
-Validierung:
-- Muss mit `https://` oder `http://` beginnen
-- Kein trailing Slash
+Validation:
+- Must start with `https://` or `http://`
+- No trailing slash
 
-Falls die Umgebungsvariable `GITLAB_URL` gesetzt ist, schlage diesen Wert als Default vor.
+If the `GITLAB_URL` environment variable is set, suggest it as the default.
 
-### Step 4: GitLab-Projekt abfragen
+### Step 4: Ask for the GitLab project
 
-Frage den Benutzer nach dem Projekt-Pfad:
+Ask the user for the project path:
 
-> **GitLab Projekt-Pfad?**
-> z.B. `group/project` oder `group/subgroup/project`
+> **GitLab project path?**
+> e.g. `group/project` or `group/subgroup/project`
 
-Falls `glab` bereits authentifiziert ist, versuche die verfügbaren Projekte zu listen als Hilfe:
+If `glab` is already authenticated, try listing the available projects as a helper:
 
 ```bash
 glab repo list --output json 2>/dev/null | head -20
 ```
 
-Falls die Umgebungsvariable `GITLAB_PROJECT` gesetzt ist, schlage diesen Wert als Default vor.
+If the `GITLAB_PROJECT` environment variable is set, suggest it as the default.
 
-### Step 5: glab-Authentifizierung prüfen
+### Step 5: Check glab authentication
 
-Prüfe ob `glab` für den angegebenen GitLab-Server authentifiziert ist:
+Check whether `glab` is authenticated for the given GitLab server:
 
 ```bash
 glab auth status --hostname <gitlab-host>
 ```
 
-Falls nicht authentifiziert, informiere den Benutzer:
+If not authenticated, inform the user:
 
-> `glab` ist nicht für `<gitlab-host>` authentifiziert.
-> Bitte führe aus: `glab auth login --hostname <gitlab-host>`
-> Oder setze die Umgebungsvariable: `export GITLAB_TOKEN="glpat-..."`
+> `glab` is not authenticated for `<gitlab-host>`.
+> Please run: `glab auth login --hostname <gitlab-host>`
+> Or set the environment variable: `export GITLAB_TOKEN="glpat-..."`
 
-Frage ob trotzdem fortgefahren werden soll (Config kann auch ohne Auth geschrieben werden).
+Ask whether to continue anyway (the config can be written even without auth).
 
-### Step 6: Label-Konfiguration abfragen
+### Step 6: Ask for the label configuration
 
-Frage den Benutzer nach den Labels (mit Defaults):
+Ask the user for the labels (with defaults):
 
-> **Label für User Stories?** (Default: `user-story`)
-> **Label für Tasks?** (Default: `task`)
-> **Label für spec-kit Tracking?** (Default: `spec-kit`)
-> **Label für Feature-Issues?** (Default: `feature`)
+> **Label for user stories?** (Default: `user-story`)
+> **Label for tasks?** (Default: `task`)
+> **Label for spec-kit tracking?** (Default: `spec-kit`)
+> **Label for feature issues?** (Default: `feature`)
 
-Die meisten Benutzer werden die Defaults akzeptieren.
+Most users will accept the defaults.
 
-### Step 7: Mapping-Optionen abfragen
+### Step 7: Ask for mapping options
 
-Frage nach den Mapping-Optionen (mit Defaults):
+Ask about the mapping options (with defaults):
 
-> **Priority als Label mappen?** (z.B. P1 → `priority::1`) (Default: ja)
-> **Tasks mit Story-Issues verlinken?** (Default: ja)
-> **Feature als Milestone anlegen?** (Der Feature-Name wird als GitLab Milestone verwendet) (Default: ja)
-> **Feature als GitLab Issue erstellen?** (Erstellt ein übergeordnetes Issue pro Feature) (Default: ja)
+> **Map priority to a label?** (e.g. P1 → `priority::1`) (Default: yes)
+> **Link tasks to story issues?** (Default: yes)
+> **Create the feature as a milestone?** (The feature name is used as the GitLab milestone) (Default: yes)
+> **Create the feature as a GitLab issue?** (Creates a parent issue per feature) (Default: yes)
 
-### Step 8: Konfigurationsdatei schreiben
+### Step 8: Write the configuration file
 
-Erstelle die Konfigurationsdatei unter `.specify/extensions/gitlab/gitlab-config.yml`:
+Create the configuration file at `.specify/extensions/gitlab/gitlab-config.yml`:
 
 ```yaml
 gitlab:
-  url: "<eingegebene URL>"
-  project: "<eingegebener Projekt-Pfad>"
+  url: "<entered URL>"
+  project: "<entered project path>"
 
 labels:
-  story_label: "<eingegebenes Label>"
-  task_label: "<eingegebenes Label>"
-  speckit_label: "<eingegebenes Label>"
-  feature_label: "<eingegebenes Label>"
+  story_label: "<entered label>"
+  task_label: "<entered label>"
+  speckit_label: "<entered label>"
+  feature_label: "<entered label>"
 
 mapping:
   priority_to_label: <true/false>
@@ -123,39 +123,39 @@ mapping:
   link_tasks_to_stories: <true/false>
 ```
 
-Stelle sicher, dass das Verzeichnis `.specify/extensions/gitlab/` existiert.
+Make sure the `.specify/extensions/gitlab/` directory exists.
 
-### Step 9: Verbindung testen
+### Step 9: Test the connection
 
-Falls `glab` authentifiziert ist, teste die Verbindung:
+If `glab` is authenticated, test the connection:
 
 ```bash
 glab api projects/:id --repo "<project-path>" 2>/dev/null
 ```
 
-Zeige bei Erfolg:
-> Verbindung zu `<gitlab-url>` erfolgreich. Projekt `<project>` gefunden.
+On success show:
+> Connection to `<gitlab-url>` successful. Project `<project>` found.
 
-Bei Fehler:
-> Verbindung fehlgeschlagen. Bitte prüfe URL, Projekt-Pfad und Authentifizierung.
+On failure:
+> Connection failed. Please check the URL, project path, and authentication.
 
-### Step 10: Zusammenfassung und nächste Schritte
+### Step 10: Summary and next steps
 
-Zeige eine Zusammenfassung der geschriebenen Konfiguration und die nächsten Schritte:
+Show a summary of the written configuration and the next steps:
 
 ```
-GitLab-Konfiguration gespeichert.
+GitLab configuration saved.
 
   Server:  <url>
-  Projekt: <project>
+  Project: <project>
   Labels:  <speckit-label>, <story-label>, <task-label>
 
-Nächste Schritte:
-  1. /speckit.spec                      → Spezifikation erstellen
-  2. /speckit.tasks                     → Tasks generieren
-  3. /speckit.gitlab.stories-to-issues  → Stories als GitLab Issues
-  4. /speckit.gitlab.tasks-to-issues    → Tasks als GitLab Issues
+Next steps:
+  1. /speckit.spec                      → Create the specification
+  2. /speckit.tasks                     → Generate tasks
+  3. /speckit.gitlab.stories-to-issues  → Stories as GitLab issues
+  4. /speckit.gitlab.tasks-to-issues    → Tasks as GitLab issues
 
-Tipp: Die Config kann jederzeit mit /speckit.gitlab.init aktualisiert werden.
-      Lokale Overrides: .specify/extensions/gitlab/gitlab-config.local.yml
+Tip: The config can be updated at any time with /speckit.gitlab.init.
+     Local overrides: .specify/extensions/gitlab/gitlab-config.local.yml
 ```

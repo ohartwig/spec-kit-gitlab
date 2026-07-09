@@ -4,7 +4,7 @@ extension:
   id: "gitlab"
   name: "spec-kit GitLab Integration"
   version: "1.0.0"
-  description: "GitLab-Integration für spec-kit: Issues erstellen, synchronisieren und Status-Updates via glab CLI"
+  description: "GitLab integration for spec-kit: create issues, sync, and post status updates via the glab CLI"
   author: "Kaio Lehartwig"
   license: "MIT"
 
@@ -19,48 +19,48 @@ provides:
   commands:
     - name: "speckit.gitlab.init"
       file: "commands/init.md"
-      description: "GitLab-Konfiguration interaktiv einrichten"
+      description: "Interactively set up the GitLab configuration"
 
     - name: "speckit.gitlab.tasks-to-issues"
       file: "commands/tasks-to-issues.md"
-      description: "Tasks aus tasks.md als GitLab Issues (Type: Task) erstellen"
+      description: "Create tasks from tasks.md as GitLab issues (Type: Task)"
 
     - name: "speckit.gitlab.stories-to-issues"
       file: "commands/stories-to-issues.md"
-      description: "User Stories aus spec.md als GitLab Issues erstellen"
+      description: "Create user stories from spec.md as GitLab issues"
 
     - name: "speckit.gitlab.feature-to-issue"
       file: "commands/feature-to-issue.md"
-      description: "Feature als GitLab Issue erstellen und Stories verlinken"
+      description: "Create the feature as a GitLab issue and link stories"
 
     - name: "speckit.gitlab.import-feature"
       file: "commands/import-feature.md"
-      description: "Bestehendes GitLab Issue als Feature importieren"
+      description: "Import an existing GitLab issue as a feature"
 
     - name: "speckit.gitlab.close-issues"
       file: "commands/close-issues.md"
-      description: "Erledigte Tasks/Stories in GitLab schließen, wieder geöffnete reopenen"
+      description: "Close completed tasks/stories in GitLab, reopen reopened ones"
 
     - name: "speckit.gitlab.sync"
       file: "commands/sync.md"
-      description: "GitLab Issues in spec-kit Dateien importieren/synchronisieren"
+      description: "Import/sync GitLab issues into spec-kit files"
 
     - name: "speckit.gitlab.status"
       file: "commands/status.md"
-      description: "Status von GitLab Issues in tasks.md updaten"
+      description: "Update the status of GitLab issues in tasks.md"
 
   config:
     - name: "gitlab-config.yml"
       template: "gitlab-config.template.yml"
-      description: "GitLab-Server URL, Projekt-Pfad und Label-Konfiguration"
+      description: "GitLab server URL, project path, and label configuration"
       required: true
 
 hooks:
   after_tasks:
     command: "speckit.gitlab.tasks-to-issues"
     optional: true
-    prompt: "Tasks als GitLab Issues erstellen?"
-    description: "Erstellt automatisch GitLab Issues nach Task-Generierung"
+    prompt: "Create tasks as GitLab issues?"
+    description: "Automatically creates GitLab issues after task generation"
     condition: null
 
 tags:

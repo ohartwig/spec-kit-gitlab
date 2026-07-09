@@ -1,19 +1,19 @@
 ---
-description: "Tasks aus tasks.md als GitLab Issues (Type: Task) erstellen"
+description: "Create tasks from tasks.md as GitLab issues (Type: Task)"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# Tasks als GitLab Issues erstellen
+# Create tasks as GitLab issues
 
-Erstelle für jeden Task in `tasks.md` ein GitLab Issue vom Typ "Task".
+Create a GitLab issue of type "Task" for each task in `tasks.md`.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature-Verzeichnis mit `tasks.md` ist vorhanden
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
+- Feature directory with `tasks.md` is present
 
 ## User Input
 
@@ -21,100 +21,100 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Feature-Verzeichnis ermitteln
+### Step 1: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln. Das Feature-Verzeichnis enthält `tasks.md`.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory. The feature directory contains `tasks.md`.
 
-Falls kein Feature-Verzeichnis gefunden wird, informiere den Benutzer und brich ab.
+If no feature directory is found, inform the user and abort.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-Folgende Werte werden benötigt:
-- `GITLAB_URL` - URL des GitLab-Servers
-- `GITLAB_PROJECT` - Projekt-Pfad (z.B. "group/project")
-- Labels: `spec-kit`, `task` und ggf. Priority-Labels
-- `GITLAB_FEATURE_TO_MILESTONE` - ob Feature als Milestone gemappt wird
+The following values are needed:
+- `GITLAB_URL` - URL of the GitLab server
+- `GITLAB_PROJECT` - project path (e.g. "group/project")
+- Labels: `spec-kit`, `task`, and priority labels if applicable
+- `GITLAB_FEATURE_TO_MILESTONE` - whether the feature is mapped to a milestone
 
-Falls `GITLAB_URL` oder `GITLAB_PROJECT` nicht gesetzt sind, prüfe auch die Umgebungsvariablen.
+If `GITLAB_URL` or `GITLAB_PROJECT` are not set, also check the environment variables.
 
-Falls `feature_to_milestone: true`, ermittle den Feature-Namen und stelle sicher, dass ein Milestone existiert:
+If `feature_to_milestone: true`, determine the feature name and make sure a milestone exists:
 
 ```bash
 MILESTONE_TITLE="$(glab_ensure_milestone "$(get_feature_name "$FEATURE_DIR")")"
 ```
 
-### Step 3: tasks.md lesen und parsen
+### Step 3: Read and parse tasks.md
 
-Lies die Datei `tasks.md` im Feature-Verzeichnis. Parse jeden Task im Format:
+Read the `tasks.md` file in the feature directory. Parse each task in the format:
 
 ```
-- [ ] T001 [P1] [US1] Task-Beschreibung
-- [x] T002 [P2] [US1] Bereits erledigter Task
+- [ ] T001 [P1] [US1] Task description
+- [x] T002 [P2] [US1] Already completed task
 ```
 
-Extrahiere für jeden Task:
-- **Task-ID**: z.B. `T001`
-- **Priority**: z.B. `P1` (aus `[P1]`)
-- **Story-Referenz**: z.B. `US1` (aus `[US1]`)
-- **Beschreibung**: Der Rest der Zeile
-- **Status**: `[ ]` = offen, `[x]` = erledigt
+Extract for each task:
+- **Task ID**: e.g. `T001`
+- **Priority**: e.g. `P1` (from `[P1]`)
+- **Story reference**: e.g. `US1` (from `[US1]`)
+- **Description**: the rest of the line
+- **Status**: `[ ]` = open, `[x]` = complete
 
-### Step 4: Idempotenz prüfen
+### Step 4: Check idempotency
 
-Lies die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml` (falls vorhanden). Überspringe Tasks, die dort bereits eine GitLab Issue-Nummer haben.
+Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present). Skip tasks that already have a GitLab issue number there.
 
-Prüfe auch, ob in `tasks.md` bereits GitLab-URLs als Kommentare stehen (Format: `<!-- gitlab:#123 -->`). Diese Tasks ebenfalls überspringen.
+Also check whether `tasks.md` already has GitLab URLs as comments (format: `<!-- gitlab:#123 -->`). Skip these tasks as well.
 
-### Step 5: GitLab Issues erstellen
+### Step 5: Create GitLab issues
 
-Für jeden noch nicht erstellten Task:
+For each task not yet created:
 
-1. **Labels zusammenstellen:**
-   - Immer: `spec-kit`, `task`
-   - Bei gesetzter Priority: `priority::1` (für P1), `priority::2` (für P2) etc.
-   - Story-Label: `story::US1` (falls Story-Referenz vorhanden)
+1. **Assemble labels:**
+   - Always: `spec-kit`, `task`
+   - If priority is set: `priority::1` (for P1), `priority::2` (for P2), etc.
+   - Story label: `story::US1` (if a story reference is present)
 
-2. **Issue erstellen** via `glab`:
+2. **Create the issue** via `glab`:
    ```bash
    glab issue create \
      --repo "$GITLAB_PROJECT" \
-     --title "T001: Task-Beschreibung" \
-     --description "**Task-ID:** T001\n**Priority:** P1\n**Story:** US1\n\nTask-Beschreibung" \
+     --title "T001: Task description" \
+     --description "**Task ID:** T001\n**Priority:** P1\n**Story:** US1\n\nTask description" \
      --label "spec-kit,task,priority::1,story::US1" \
      --type "task" \
      --milestone "$MILESTONE_TITLE" \
      --yes
    ```
 
-   Den `--milestone`-Parameter nur setzen, wenn `feature_to_milestone: true` und `MILESTONE_TITLE` gesetzt ist. Nutze `glab_create_issue` mit dem 5. Parameter für den Milestone.
+   Only set the `--milestone` parameter if `feature_to_milestone: true` and `MILESTONE_TITLE` is set. Use `glab_create_issue` with the 5th parameter for the milestone.
 
-3. **Issue-URL und Nummer** aus dem Output extrahieren.
+3. **Extract the issue URL and number** from the output.
 
-4. **Mit Story-Issue verlinken** (falls `link_tasks_to_stories: true` und Story-Issue existiert):
+4. **Link to the story issue** (if `link_tasks_to_stories: true` and a story issue exists):
    ```bash
    glab issue relation add <task-issue-nr> --related <story-issue-nr> --repo "$GITLAB_PROJECT"
    ```
 
-### Step 6: Mapping und tasks.md aktualisieren
+### Step 6: Update the mapping and tasks.md
 
-1. **Mapping-Datei** (`FEATURE_DIR/.gitlab-mapping.yml`) aktualisieren:
+1. **Update the mapping file** (`FEATURE_DIR/.gitlab-mapping.yml`):
    ```yaml
    tasks:
      T001: "#42 https://gitlab.example.com/group/project/-/issues/42"
      T002: "#43 https://gitlab.example.com/group/project/-/issues/43"
    ```
 
-2. **tasks.md** mit GitLab-Referenzen ergänzen (als HTML-Kommentar am Zeilenende):
+2. **Add GitLab references to tasks.md** (as an HTML comment at the end of the line):
    ```
-   - [ ] T001 [P1] [US1] Task-Beschreibung <!-- gitlab:#42 -->
+   - [ ] T001 [P1] [US1] Task description <!-- gitlab:#42 -->
    ```
 
-### Step 7: Zusammenfassung
+### Step 7: Summary
 
-Zeige eine Übersicht:
-- Anzahl erstellte Issues
-- Anzahl übersprungene Issues (bereits vorhanden)
-- Links zu den erstellten Issues
-- Eventuelle Fehler
+Show an overview:
+- Number of issues created
+- Number of issues skipped (already present)
+- Links to the created issues
+- Any errors

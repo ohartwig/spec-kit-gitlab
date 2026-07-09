@@ -1,10 +1,10 @@
 # spec-kit GitLab Extension
 
-GitLab-Integration für [spec-kit](https://github.com/github/spec-kit): Issues erstellen, synchronisieren und Status-Updates via `glab` CLI.
+GitLab integration for [spec-kit](https://github.com/github/spec-kit): create issues, sync, and post status updates via the `glab` CLI.
 
-Unterstützt self-hosted GitLab-Instanzen.
+Supports self-hosted GitLab instances.
 
-## Voraussetzungen
+## Requirements
 
 - **spec-kit** >= 0.1.0
 - **glab CLI** >= 1.0.0 ([GitLab CLI](https://gitlab.com/gitlab-org/cli))
@@ -12,24 +12,24 @@ Unterstützt self-hosted GitLab-Instanzen.
 ## Installation
 
 ```bash
-# glab CLI installieren und authentifizieren
+# Install and authenticate the glab CLI
 brew install glab
 glab auth login --hostname gitlab.example.com
 
-# Extension installieren (Development-Modus)
+# Install the extension (development mode)
 cd /path/to/your/spec-kit-project
 specify extension add --dev ~/spec-kit-gitlab/
 ```
 
-## Konfiguration
+## Configuration
 
-Am einfachsten per interaktivem Setup:
+The easiest way is via the interactive setup:
 
 ```bash
 /speckit.gitlab.init
 ```
 
-Das erstellt die Konfigurationsdatei unter `.specify/extensions/gitlab/gitlab-config.yml`:
+This creates the configuration file at `.specify/extensions/gitlab/gitlab-config.yml`:
 
 ```yaml
 gitlab:
@@ -44,12 +44,12 @@ labels:
 
 mapping:
   priority_to_label: true          # P1/P2/P3 → priority::1/2/3
-  feature_to_milestone: true       # Feature-Name als GitLab Milestone
-  feature_to_issue: true           # Feature als GitLab Issue erstellen
-  link_tasks_to_stories: true      # Tasks mit Story-Issues verlinken
+  feature_to_milestone: true       # Feature name as a GitLab milestone
+  feature_to_issue: true           # Create the feature as a GitLab issue
+  link_tasks_to_stories: true      # Link tasks to story issues
 ```
 
-Alternativ via Umgebungsvariablen:
+Alternatively, via environment variables:
 
 ```bash
 export GITLAB_URL="https://gitlab.example.com"
@@ -61,64 +61,64 @@ export GITLAB_TOKEN="glpat-xxxxxxxxxxxx"
 
 ### `/speckit.gitlab.init`
 
-Interaktive Einrichtung der GitLab-Konfiguration. Prüft `glab`-Installation, testet die Verbindung und schreibt die Konfigurationsdatei.
+Interactive setup of the GitLab configuration. Checks the `glab` installation, tests the connection, and writes the configuration file.
 
 ### `/speckit.gitlab.feature-to-issue`
 
-Erstellt ein GitLab Issue für das aktuelle Feature und verlinkt bestehende Story-Issues damit. Verwendet den Feature-Verzeichnisnamen als Titel und den Kontext aus `spec.md` als Beschreibung. Labels: `spec-kit`, `feature`.
+Creates a GitLab issue for the current feature and links existing story issues to it. Uses the feature directory name as the title and the context from `spec.md` as the description. Labels: `spec-kit`, `feature`.
 
 ### `/speckit.gitlab.import-feature`
 
-Importiert ein bestehendes GitLab Issue als Feature. Argument: Issue-Nummer (z.B. `232` oder `#232`). Schreibt das Mapping, erstellt optional eine `spec.md` aus der Issue-Beschreibung und verlinkt bestehende Stories.
+Imports an existing GitLab issue as a feature. Argument: issue number (e.g. `232` or `#232`). Writes the mapping, optionally creates a `spec.md` from the issue description, and links existing stories.
 
 ### `/speckit.gitlab.stories-to-issues`
 
-Erstellt GitLab Issues für alle User Stories aus `spec.md`. Erwartet das Format `### US1: Titel [P1]` und vergibt automatisch Labels (`spec-kit`, `user-story`, `priority::X`). Verlinkt neue Stories automatisch mit dem Feature-Issue (falls vorhanden).
+Creates GitLab issues for all user stories from `spec.md`. Expects the format `### US1: Title [P1]` and automatically assigns labels (`spec-kit`, `user-story`, `priority::X`). Automatically links new stories to the feature issue (if one exists).
 
 ### `/speckit.gitlab.tasks-to-issues`
 
-Erstellt GitLab Issues (Type: Task) für alle Tasks aus `tasks.md`. Erwartet das Format `- [ ] T001 [P1] [US1] Beschreibung`. Verlinkt Tasks automatisch mit ihren Story-Issues.
+Creates GitLab issues (Type: Task) for all tasks from `tasks.md`. Expects the format `- [ ] T001 [P1] [US1] Description`. Automatically links tasks to their story issues.
 
 ### `/speckit.gitlab.close-issues`
 
-Synchronisiert den lokalen Erledigungsstatus nach GitLab. Tasks mit `[x]` in `tasks.md` werden in GitLab geschlossen, wieder geöffnete (`[ ]`) werden reopened. Stories werden automatisch geschlossen wenn alle zugehörigen Tasks erledigt sind.
+Syncs the local completion status to GitLab. Tasks marked `[x]` in `tasks.md` are closed in GitLab; tasks reopened (`[ ]`) are reopened. Stories are automatically closed once all their tasks are complete.
 
 ### `/speckit.gitlab.sync`
 
-Synchronisiert GitLab Issue-Status in die lokalen `tasks.md` Dateien. Aktualisiert Checkboxen basierend auf dem Issue-Status (open/closed). Zeigt Feature-Issue Status an (falls vorhanden). Optional: Importiert neue GitLab Issues mit `--import`.
+Syncs GitLab issue status into the local `tasks.md` files. Updates checkboxes based on issue status (open/closed). Shows the feature issue status (if one exists). Optional: imports new GitLab issues with `--import`.
 
 ### `/speckit.gitlab.status`
 
-Zeigt eine Übersicht aller GitLab Issues mit aktuellem Status (Task-ID, Issue-Nummer, Status, Assignee) und aktualisiert `tasks.md`. Zeigt Feature-Issue Status am Anfang der Übersicht an. Enthält Fortschrittsstatistik (offen, geschlossen, Prozent).
+Shows an overview of all GitLab issues with their current status (task ID, issue number, status, assignee) and updates `tasks.md`. Shows the feature issue status at the top of the overview. Includes progress statistics (open, closed, percent).
 
 ## Workflow
 
-### Push-Workflow (Lokal → GitLab)
+### Push workflow (Local → GitLab)
 
 ```
-1. /speckit.gitlab.init              → GitLab-Verbindung einrichten
-2. /speckit.spec                     → spec.md erstellen
-3. /speckit.gitlab.feature-to-issue  → Feature als GitLab Issue erstellen
-4. /speckit.tasks                    → tasks.md generieren
-5. /speckit.gitlab.stories-to-issues → Stories als GitLab Issues (verlinkt mit Feature)
-6. /speckit.gitlab.tasks-to-issues   → Tasks als GitLab Issues (verlinkt mit Stories)
-7. /speckit.gitlab.close-issues      → Erledigte Issues in GitLab schließen
-8. /speckit.gitlab.status            → Status synchronisieren
+1. /speckit.gitlab.init              → Set up the GitLab connection
+2. /speckit.spec                     → Create spec.md
+3. /speckit.gitlab.feature-to-issue  → Create the feature as a GitLab issue
+4. /speckit.tasks                    → Generate tasks.md
+5. /speckit.gitlab.stories-to-issues → Stories as GitLab issues (linked to the feature)
+6. /speckit.gitlab.tasks-to-issues   → Tasks as GitLab issues (linked to stories)
+7. /speckit.gitlab.close-issues      → Close completed issues in GitLab
+8. /speckit.gitlab.status            → Sync status
 ```
 
-### Pull-Workflow (GitLab → Lokal)
+### Pull workflow (GitLab → Local)
 
 ```
-1. /speckit.gitlab.import-feature 232  → Bestehendes Issue als Feature importieren
-2. /speckit.spec                       → Spezifikation erstellen/verfeinern
-3. /speckit.tasks                      → Tasks generieren
-4. /speckit.gitlab.stories-to-issues   → Stories als GitLab Issues
-5. /speckit.gitlab.tasks-to-issues     → Tasks als GitLab Issues
+1. /speckit.gitlab.import-feature 232  → Import an existing issue as a feature
+2. /speckit.spec                       → Create/refine the specification
+3. /speckit.tasks                      → Generate tasks
+4. /speckit.gitlab.stories-to-issues   → Stories as GitLab issues
+5. /speckit.gitlab.tasks-to-issues     → Tasks as GitLab issues
 ```
 
-## Mapping-Datei
+## Mapping file
 
-Die Extension pflegt eine `.gitlab-mapping.yml` im Feature-Verzeichnis, um Idempotenz sicherzustellen:
+The extension maintains a `.gitlab-mapping.yml` in the feature directory to ensure idempotency:
 
 ```yaml
 feature: "#232 https://gitlab.example.com/group/project/-/issues/232"
@@ -128,14 +128,14 @@ tasks:
   T001: "#42 https://gitlab.example.com/group/project/-/issues/42"
 ```
 
-Das `feature:`-Feld wird von `/speckit.gitlab.feature-to-issue` (Push) oder `/speckit.gitlab.import-feature` (Pull) gesetzt. Stories werden automatisch mit dem Feature-Issue verlinkt.
+The `feature:` field is set by `/speckit.gitlab.feature-to-issue` (push) or `/speckit.gitlab.import-feature` (pull). Stories are automatically linked to the feature issue.
 
-Dadurch können Commands mehrfach ausgeführt werden, ohne Duplikate zu erzeugen.
+This lets commands be run multiple times without creating duplicates.
 
 ## Hook
 
-Nach `/speckit.tasks` wird automatisch gefragt, ob Tasks als GitLab Issues erstellt werden sollen.
+After `/speckit.tasks`, you're automatically asked whether tasks should be created as GitLab issues.
 
-## Lizenz
+## License
 
 MIT — Moselwal Digitalagentur GmbH

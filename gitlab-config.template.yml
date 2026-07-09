@@ -1,19 +1,19 @@
 gitlab:
-  # URL deines self-hosted GitLab (z.B. https://gitlab.example.com)
+  # URL of your self-hosted GitLab (e.g. https://gitlab.example.com)
   url: "${GITLAB_URL}"
-  # Projekt-Pfad (z.B. "group/project" oder "group/subgroup/project")
+  # Project path (e.g. "group/project" or "group/subgroup/project")
   project: "${GITLAB_PROJECT}"
 
 labels:
-  # Labels die automatisch gesetzt werden
+  # Labels that are set automatically
   story_label: "user-story"
   task_label: "task"
   speckit_label: "spec-kit"
-  feature_label: "feature"      # Label für Feature-Issues
+  feature_label: "feature"      # Label for feature issues
 
 mapping:
-  # Wie Tasks auf GitLab-Felder gemappt werden
+  # How tasks are mapped to GitLab fields
   priority_to_label: true       # P1 → priority::1
-  feature_to_milestone: true    # Feature-Name als Milestone
-  feature_to_issue: true        # Feature als GitLab Issue erstellen
-  link_tasks_to_stories: true   # Task-Issues mit Story-Issues verlinken
+  feature_to_milestone: true    # Feature name as milestone
+  feature_to_issue: true        # Create the feature as a GitLab issue
+  link_tasks_to_stories: true   # Link task issues to story issues
