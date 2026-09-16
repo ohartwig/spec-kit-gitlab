@@ -1,19 +1,19 @@
 ---
-description: "Feature als GitLab Issue erstellen und Stories verlinken"
+description: "Create the feature as a GitLab issue and link stories"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# Feature als GitLab Issue erstellen
+# Create the feature as a GitLab issue
 
-Erstellt ein GitLab Issue für das aktuelle Feature und verlinkt bestehende Story-Issues damit.
+Creates a GitLab issue for the current feature and links existing story issues to it.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature-Verzeichnis mit `spec.md` ist vorhanden
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
+- Feature directory with `spec.md` is present
 
 ## User Input
 
@@ -21,65 +21,65 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Feature-Verzeichnis ermitteln
+### Step 1: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln. Das Feature-Verzeichnis enthält `spec.md`.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory. The feature directory contains `spec.md`.
 
-Falls kein Feature-Verzeichnis gefunden wird, informiere den Benutzer und brich ab.
+If no feature directory is found, inform the user and abort.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-Folgende Werte werden benötigt:
-- `GITLAB_URL` - URL des GitLab-Servers
-- `GITLAB_PROJECT` - Projekt-Pfad
-- `GITLAB_FEATURE_TO_ISSUE` - ob Feature als Issue erstellt wird
-- `GITLAB_FEATURE_LABEL` - Label für Feature-Issues
-- `GITLAB_FEATURE_TO_MILESTONE` - ob Feature als Milestone gemappt wird
+The following values are needed:
+- `GITLAB_URL` - URL of the GitLab server
+- `GITLAB_PROJECT` - project path
+- `GITLAB_FEATURE_TO_ISSUE` - whether the feature is created as an issue
+- `GITLAB_FEATURE_LABEL` - label for feature issues
+- `GITLAB_FEATURE_TO_MILESTONE` - whether the feature is mapped to a milestone
 
-Falls `GITLAB_FEATURE_TO_ISSUE` nicht `true` ist, informiere den Benutzer und brich ab:
-> Feature-to-Issue ist in der Konfiguration deaktiviert (`feature_to_issue: false`).
+If `GITLAB_FEATURE_TO_ISSUE` is not `true`, inform the user and abort:
+> Feature-to-issue is disabled in the configuration (`feature_to_issue: false`).
 
-### Step 3: Idempotenz prüfen
+### Step 3: Check idempotency
 
-Lies die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml` (falls vorhanden). Prüfe den `feature:`-Eintrag mit `read_feature_mapping`.
+Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present). Check the `feature:` entry with `read_feature_mapping`.
 
-Falls bereits ein Feature-Issue gemappt ist, zeige die bestehende Zuordnung und brich ab:
-> Feature-Issue existiert bereits: #232 (https://...)
-> Überspringe Erstellung.
+If a feature issue is already mapped, show the existing mapping and abort:
+> Feature issue already exists: #232 (https://...)
+> Skipping creation.
 
-### Step 4: Feature-Issue erstellen
+### Step 4: Create the feature issue
 
-1. **Feature-Name** ermitteln: Verzeichnisname des Feature-Verzeichnisses (z.B. `user-authentication`).
+1. **Determine the feature name**: directory name of the feature directory (e.g. `user-authentication`).
 
-2. **Beschreibung** aus `spec.md` extrahieren: Lies den Inhalt vor `## User Stories` (Übersicht/Kontext des Features). Falls `## User Stories` nicht existiert, verwende den gesamten Inhalt von `spec.md`.
+2. **Extract the description** from `spec.md`: read the content before `## User Stories` (overview/context of the feature). If `## User Stories` doesn't exist, use the entire content of `spec.md`.
 
-3. **Labels zusammenstellen:**
-   - Immer: `spec-kit`, den konfigurierten `GITLAB_FEATURE_LABEL` (Default: `feature`)
+3. **Assemble labels:**
+   - Always: `spec-kit`, the configured `GITLAB_FEATURE_LABEL` (default: `feature`)
 
-4. **Milestone** ermitteln (falls `feature_to_milestone: true`):
+4. **Determine the milestone** (if `feature_to_milestone: true`):
    ```bash
    MILESTONE_TITLE="$(glab_ensure_milestone "$(get_feature_name "$FEATURE_DIR")")"
    ```
 
-5. **Issue erstellen** via `glab_create_issue`:
-   - Titel: Feature-Name (human-readable, z.B. `user-authentication`)
-   - Beschreibung: Extrahierter Kontext aus `spec.md`
+5. **Create the issue** via `glab_create_issue`:
+   - Title: feature name (human-readable, e.g. `user-authentication`)
+   - Description: extracted context from `spec.md`
    - Labels: `spec-kit,feature`
-   - Milestone: Falls gesetzt, `MILESTONE_TITLE`
+   - Milestone: if set, `MILESTONE_TITLE`
 
-6. **Issue-URL und Nummer** aus dem Output extrahieren.
+6. **Extract the issue URL and number** from the output.
 
-### Step 5: Mapping schreiben
+### Step 5: Write the mapping
 
-Schreibe das Feature-Mapping in `FEATURE_DIR/.gitlab-mapping.yml`:
+Write the feature mapping to `FEATURE_DIR/.gitlab-mapping.yml`:
 
 ```bash
 write_feature_mapping "$MAPPING_PATH" "$ISSUE_NUMBER" "$ISSUE_URL"
 ```
 
-Das ergibt z.B.:
+This produces e.g.:
 ```yaml
 feature: "#232 https://gitlab.example.com/group/project/-/issues/232"
 stories:
@@ -87,24 +87,24 @@ stories:
 tasks: {}
 ```
 
-### Step 6: Bestehende Stories verlinken
+### Step 6: Link existing stories
 
-Lies alle Einträge aus `stories:` in der Mapping-Datei. Für jeden Story-Eintrag:
+Read all entries from `stories:` in the mapping file. For each story entry:
 
-1. Extrahiere die Story-Issue-Nummer
-2. Verlinke das Story-Issue mit dem Feature-Issue:
+1. Extract the story issue number
+2. Link the story issue to the feature issue:
    ```bash
    glab_add_relation "$STORY_ISSUE_NUMBER" "$FEATURE_ISSUE_NUMBER"
    ```
 
-Falls keine Stories vorhanden sind, überspringe diesen Schritt mit einem Hinweis:
-> Keine bestehenden Story-Issues zum Verlinken gefunden.
+If no stories are present, skip this step with a note:
+> No existing story issues found to link.
 
-### Step 7: Zusammenfassung
+### Step 7: Summary
 
-Zeige eine Übersicht:
-- Feature-Issue erstellt: `#232 - user-authentication`
+Show an overview:
+- Feature issue created: `#232 - user-authentication`
 - URL: `https://gitlab.example.com/.../issues/232`
-- Milestone: Falls gesetzt
-- Verlinkte Stories: Anzahl und Liste
-- Hinweis: "Führe `/speckit.gitlab.stories-to-issues` aus, um neue Stories zu erstellen — diese werden automatisch verlinkt."
+- Milestone: if set
+- Linked stories: count and list
+- Note: "Run `/speckit.gitlab.stories-to-issues` to create new stories — they will be linked automatically."

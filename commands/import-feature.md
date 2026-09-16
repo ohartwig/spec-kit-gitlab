@@ -1,125 +1,125 @@
 ---
-description: "Bestehendes GitLab Issue als Feature importieren"
+description: "Import an existing GitLab issue as a feature"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# GitLab Issue als Feature importieren
+# Import a GitLab issue as a feature
 
-Nimmt ein bestehendes GitLab Issue und adoptiert es als Feature in spec-kit.
+Takes an existing GitLab issue and adopts it as a feature in spec-kit.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
 
 ## User Input
 
 $ARGUMENTS
 
-Das Argument ist die **Issue-Nummer** des zu importierenden GitLab Issues (z.B. `232` oder `#232`).
+The argument is the **issue number** of the GitLab issue to import (e.g. `232` or `#232`).
 
 ## Steps
 
-### Step 1: Issue-Nummer ermitteln
+### Step 1: Determine the issue number
 
-Extrahiere die Issue-Nummer aus dem Argument. Akzeptiere Formate wie `232`, `#232` oder eine volle GitLab-URL.
+Extract the issue number from the argument. Accept formats such as `232`, `#232`, or a full GitLab URL.
 
-Falls kein Argument übergeben wurde, frage den Benutzer nach der Issue-Nummer.
+If no argument was passed, ask the user for the issue number.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-### Step 3: Issue von GitLab abrufen
+### Step 3: Fetch the issue from GitLab
 
-Rufe die Issue-Details ab:
+Fetch the issue details:
 
 ```bash
 glab_view_issue "$ISSUE_NUMBER"
 ```
 
-Extrahiere:
-- **Titel**: z.B. `user-authentication`
-- **Beschreibung**: Issue-Body
-- **Status**: `opened` oder `closed`
-- **Labels**: Aktuelle Labels
-- **URL**: Web-URL des Issues
+Extract:
+- **Title**: e.g. `user-authentication`
+- **Description**: issue body
+- **Status**: `opened` or `closed`
+- **Labels**: current labels
+- **URL**: web URL of the issue
 
-Falls das Issue nicht gefunden wird, informiere den Benutzer und brich ab.
+If the issue is not found, inform the user and abort.
 
-### Step 4: Feature-Verzeichnis ermitteln
+### Step 4: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
 
-Falls kein Feature-Verzeichnis gefunden wird:
-- Leite den Verzeichnisnamen aus dem Issue-Titel ab (lowercase, Leerzeichen durch Bindestriche ersetzen)
-- Informiere den Benutzer über den vorgeschlagenen Pfad
-- Frage ob das Verzeichnis erstellt werden soll
+If no feature directory is found:
+- Derive the directory name from the issue title (lowercase, spaces replaced with hyphens)
+- Inform the user of the proposed path
+- Ask whether the directory should be created
 
-### Step 5: Idempotenz prüfen
+### Step 5: Check idempotency
 
-Lies die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml` (falls vorhanden). Prüfe den `feature:`-Eintrag.
+Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present). Check the `feature:` entry.
 
-Falls bereits ein anderes Feature-Issue gemappt ist, warne den Benutzer:
-> Feature-Verzeichnis ist bereits mit Issue #XYZ verknüpft.
-> Soll das Mapping auf #232 aktualisiert werden?
+If a different feature issue is already mapped, warn the user:
+> The feature directory is already linked to issue #XYZ.
+> Should the mapping be updated to #232?
 
-### Step 6: Mapping schreiben
+### Step 6: Write the mapping
 
-Initialisiere die Mapping-Datei (falls nötig) und schreibe das Feature-Mapping:
+Initialize the mapping file (if needed) and write the feature mapping:
 
 ```bash
 MAPPING_PATH="$(init_mapping_file "$FEATURE_DIR")"
 write_feature_mapping "$MAPPING_PATH" "$ISSUE_NUMBER" "$ISSUE_URL"
 ```
 
-### Step 7: Optional — spec.md Seed
+### Step 7: Optional — spec.md seed
 
-Falls noch keine `spec.md` im Feature-Verzeichnis existiert und das Issue eine Beschreibung hat:
+If no `spec.md` exists yet in the feature directory and the issue has a description:
 
-1. Erstelle eine initiale `spec.md` mit der Issue-Beschreibung als Ausgangspunkt:
+1. Create an initial `spec.md` using the issue description as a starting point:
    ```markdown
-   # Feature-Titel
+   # Feature Title
 
-   <!-- Importiert von GitLab Issue #232 -->
+   <!-- Imported from GitLab issue #232 -->
 
-   <Issue-Beschreibung>
+   <Issue description>
 
    ## User Stories
 
-   <!-- Erstelle User Stories mit /speckit.spec -->
+   <!-- Create user stories with /speckit.spec -->
    ```
 
-2. Informiere den Benutzer:
-   > `spec.md` wurde mit der Issue-Beschreibung als Seed erstellt.
-   > Verfeinere die Spezifikation mit `/speckit.spec`.
+2. Inform the user:
+   > `spec.md` was seeded with the issue description.
+   > Refine the specification with `/speckit.spec`.
 
-Falls `spec.md` bereits existiert, überspringe diesen Schritt.
+If `spec.md` already exists, skip this step.
 
-### Step 8: Bestehende Stories verlinken
+### Step 8: Link existing stories
 
-Falls Story-Issues in der Mapping-Datei vorhanden sind (`stories:` Section), verlinke sie mit dem Feature-Issue:
+If story issues are present in the mapping file (the `stories:` section), link them to the feature issue:
 
 ```bash
 glab_add_relation "$STORY_ISSUE_NUMBER" "$FEATURE_ISSUE_NUMBER"
 ```
 
-### Step 9: Zusammenfassung und nächste Schritte
+### Step 9: Summary and next steps
 
-Zeige eine Übersicht:
-- Importiertes Issue: `#232 - user-authentication`
+Show an overview:
+- Imported issue: `#232 - user-authentication`
 - Status: `Open`
-- Feature-Verzeichnis: `<pfad>`
-- Mapping geschrieben: ja
-- spec.md Seed: erstellt / übersprungen (bereits vorhanden)
-- Verlinkte Stories: Anzahl
+- Feature directory: `<path>`
+- Mapping written: yes
+- spec.md seed: created / skipped (already present)
+- Linked stories: count
 
-Nächste Schritte:
+Next steps:
 ```
-1. /speckit.spec                      → Spezifikation erstellen/verfeinern
-2. /speckit.tasks                     → Tasks generieren
-3. /speckit.gitlab.stories-to-issues  → Stories als GitLab Issues
-4. /speckit.gitlab.tasks-to-issues    → Tasks als GitLab Issues
+1. /speckit.spec                      → Create/refine the specification
+2. /speckit.tasks                     → Generate tasks
+3. /speckit.gitlab.stories-to-issues  → Stories as GitLab issues
+4. /speckit.gitlab.tasks-to-issues    → Tasks as GitLab issues
 ```

@@ -1,19 +1,19 @@
 ---
-description: "Erledigte Tasks/Stories in GitLab schließen, wieder geöffnete reopenen"
+description: "Close completed tasks/stories in GitLab, reopen reopened ones"
 scripts:
   check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
   gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
 ---
 
-# Erledigte Issues in GitLab schließen
+# Close completed issues in GitLab
 
-Synchronisiert den lokalen Erledigungsstatus (Checkboxen in `tasks.md`) nach GitLab: Erledigte Tasks/Stories werden geschlossen, wieder geöffnete werden reopened.
+Syncs the local completion status (checkboxes in `tasks.md`) to GitLab: completed tasks/stories are closed, reopened ones are reopened.
 
 ## Prerequisites
 
-- `glab` CLI ist installiert und authentifiziert (`GITLAB_TOKEN` gesetzt)
-- GitLab-Konfiguration existiert (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature-Verzeichnis mit `tasks.md` und `.gitlab-mapping.yml` vorhanden
+- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
+- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
+- Feature directory with `tasks.md` and `.gitlab-mapping.yml` is present
 
 ## User Input
 
@@ -21,95 +21,95 @@ $ARGUMENTS
 
 ## Steps
 
-### Step 1: Feature-Verzeichnis ermitteln
+### Step 1: Determine the feature directory
 
-Nutze `{SCRIPT:check-prerequisites.sh}` um das aktuelle Feature-Verzeichnis zu ermitteln.
+Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
 
-Falls kein Feature-Verzeichnis gefunden wird, informiere den Benutzer und brich ab.
+If no feature directory is found, inform the user and abort.
 
-### Step 2: Konfiguration laden
+### Step 2: Load configuration
 
-Lade die GitLab-Konfiguration aus `.specify/extensions/gitlab/gitlab-config.yml`. Nutze die Helper-Funktionen aus `{SCRIPT:gitlab-helpers.sh}`.
+Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
 
-### Step 3: Mapping-Datei und tasks.md laden
+### Step 3: Load the mapping file and tasks.md
 
-Lies die Mapping-Datei `FEATURE_DIR/.gitlab-mapping.yml`. Falls keine Mapping-Datei existiert:
-- Informiere den Benutzer, dass zuerst `/speckit.gitlab.tasks-to-issues` ausgeführt werden muss
-- Brich ab
+Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml`. If no mapping file exists:
+- Inform the user that `/speckit.gitlab.tasks-to-issues` must be run first
+- Abort
 
-Lies `tasks.md` im Feature-Verzeichnis und extrahiere für jeden Task:
-- **Task-ID**: z.B. `T001`
-- **Status**: `[x]` = erledigt, `[ ]` = offen
+Read `tasks.md` in the feature directory and extract for each task:
+- **Task ID**: e.g. `T001`
+- **Status**: `[x]` = complete, `[ ]` = open
 
-### Step 4: Aktuellen GitLab-Status abfragen
+### Step 4: Query the current GitLab status
 
-Für jede Issue-Nummer aus der Mapping-Datei (sowohl `tasks:` als auch `stories:` Section), rufe den aktuellen Status ab:
+For each issue number in the mapping file (both the `tasks:` and `stories:` sections), fetch the current status:
 
 ```bash
 glab_view_issue "$ISSUE_NUMBER"
 ```
 
-Extrahiere den `state` (`opened` oder `closed`).
+Extract the `state` (`opened` or `closed`).
 
-### Step 5: Tasks abgleichen und Issues schließen/reopenen
+### Step 5: Reconcile tasks and close/reopen issues
 
-Für jeden Task in der Mapping-Datei:
+For each task in the mapping file:
 
-1. **Lokal erledigt (`[x]`) + GitLab offen (`opened`)** → Issue schließen:
+1. **Complete locally (`[x]`) + open in GitLab (`opened`)** → Close the issue:
    ```bash
    glab_close_issue "$ISSUE_NUMBER"
    ```
 
-2. **Lokal offen (`[ ]`) + GitLab geschlossen (`closed`)** → Issue reopenen:
+2. **Open locally (`[ ]`) + closed in GitLab (`closed`)** → Reopen the issue:
    ```bash
    glab_reopen_issue "$ISSUE_NUMBER"
    ```
 
-3. **Status stimmt überein** → Überspringen
+3. **Status matches** → Skip
 
-### Step 6: Stories abgleichen
+### Step 6: Reconcile stories
 
-Stories haben keine Checkboxen in `spec.md`. Stattdessen gilt eine Story als erledigt, wenn **alle zugehörigen Tasks** erledigt sind.
+Stories have no checkboxes in `spec.md`. Instead, a story is considered complete when **all its tasks** are complete.
 
-Für jede Story in der Mapping-Datei:
+For each story in the mapping file:
 
-1. Ermittle alle Tasks die zu dieser Story gehören (Tasks mit `[USx]` Referenz in `tasks.md`)
-2. Falls **alle** zugehörigen Tasks `[x]` haben und das Story-Issue offen ist → Issue schließen
-3. Falls **nicht alle** Tasks erledigt sind und das Story-Issue geschlossen ist → Issue reopenen
-4. Falls die Story keine Tasks hat → Überspringen
+1. Determine all tasks that belong to this story (tasks with a `[USx]` reference in `tasks.md`)
+2. If **all** associated tasks have `[x]` and the story issue is open → close the issue
+3. If **not all** tasks are complete and the story issue is closed → reopen the issue
+4. If the story has no tasks → skip
 
-### Step 7: Feature-Issue abgleichen (optional)
+### Step 7: Reconcile the feature issue (optional)
 
-Falls ein Feature-Issue in der Mapping-Datei vorhanden ist (`feature:` Eintrag):
+If a feature issue is present in the mapping file (a `feature:` entry):
 
-1. Prüfe ob **alle** Story-Issues geschlossen sind
-2. Falls ja und das Feature-Issue offen ist → Frage den Benutzer:
-   > Alle Stories sind erledigt. Soll das Feature-Issue #232 geschlossen werden?
-3. Falls nicht alle Stories erledigt sind und das Feature-Issue geschlossen ist → Informiere den Benutzer:
-   > Feature-Issue #232 ist geschlossen, aber es gibt noch offene Stories. Soll es wieder geöffnet werden?
+1. Check whether **all** story issues are closed
+2. If yes and the feature issue is open → ask the user:
+   > All stories are complete. Should feature issue #232 be closed?
+3. If not all stories are complete and the feature issue is closed → inform the user:
+   > Feature issue #232 is closed, but there are still open stories. Should it be reopened?
 
-### Step 8: Zusammenfassung
+### Step 8: Summary
 
-Zeige eine Übersicht:
+Show an overview:
 
 ```
-Issues geschlossen/geöffnet für Feature: <feature-name>
+Issues closed/reopened for feature: <feature-name>
 ========================================================
 
-Geschlossen:
+Closed:
   T001 → #42 (closed)
   T003 → #44 (closed)
-  US1  → #10 (closed, alle Tasks erledigt)
+  US1  → #10 (closed, all tasks complete)
 
-Wieder geöffnet:
+Reopened:
   T002 → #43 (reopened)
 
-Unverändert:
-  T004 → #45 (bereits geschlossen)
-  T005 → #46 (bereits offen)
+Unchanged:
+  T004 → #45 (already closed)
+  T005 → #46 (already open)
 
-Zusammenfassung:
-  Geschlossen: 3
-  Wieder geöffnet: 1
-  Unverändert: 2
+Summary:
+  Closed: 3
+  Reopened: 1
+  Unchanged: 2
 ```
