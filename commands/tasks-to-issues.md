@@ -1,120 +1,141 @@
 ---
 description: "Create tasks from tasks.md as GitLab issues (Type: Task)"
 scripts:
-  check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
-  gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
+  sh: ../../scripts/bash/check-prerequisites.sh --json --paths-only
+  ps: ../../scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly
 ---
 
 # Create tasks as GitLab issues
 
-Create a GitLab issue of type "Task" for each task in `tasks.md`.
-
-## Prerequisites
-
-- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
-- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature directory with `tasks.md` is present
+Create a GitLab issue (type "Task" by default) for each task in `tasks.md`.
 
 ## User Input
 
+```text
 $ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty). It may limit the run to specific tasks (e.g. `T001-T010`) or one story (e.g. `US2`).
+
+## Prerequisites
+
+- `glab` CLI is installed and authenticated (`glab auth login` or `GITLAB_TOKEN`), `jq` is installed
+- The GitLab configuration exists (`__SPECKIT_COMMAND_GITLAB_INIT__`)
+- The feature directory contains `tasks.md` (`__SPECKIT_COMMAND_TASKS__`)
+
+Run all commands from the project root. Shell state may not persist between your tool calls, so `source` the helpers in the same invocation as the functions you call.
 
 ## Steps
 
 ### Step 1: Determine the feature directory
 
-Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory. The feature directory contains `tasks.md`.
+Run `{SCRIPT}` from the project root and parse the JSON output for `FEATURE_DIR`, `FEATURE_SPEC` and `TASKS`. All paths are absolute.
 
-If no feature directory is found, inform the user and abort.
+If `TASKS` doesn't exist, tell the user to run `__SPECKIT_COMMAND_TASKS__` first and abort.
 
 ### Step 2: Load configuration
 
-Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
+```bash
+source .specify/extensions/gitlab/scripts/bash/gitlab-helpers.sh
+require_tools && load_gitlab_config
+```
 
-The following values are needed:
-- `GITLAB_URL` - URL of the GitLab server
-- `GITLAB_PROJECT` - project path (e.g. "group/project")
-- Labels: `spec-kit`, `task`, and priority labels if applicable
-- `GITLAB_FEATURE_TO_MILESTONE` - whether the feature is mapped to a milestone
+If this fails, show the error and point the user to `__SPECKIT_COMMAND_GITLAB_INIT__`.
 
-If `GITLAB_URL` or `GITLAB_PROJECT` are not set, also check the environment variables.
-
-If `feature_to_milestone: true`, determine the feature name and make sure a milestone exists:
+If `GITLAB_FEATURE_TO_MILESTONE` is `true`, make sure the feature milestone exists:
 
 ```bash
 MILESTONE_TITLE="$(glab_ensure_milestone "$(get_feature_name "$FEATURE_DIR")")"
 ```
 
-### Step 3: Read and parse tasks.md
+### Step 3: Parse tasks.md
 
-Read the `tasks.md` file in the feature directory. Parse each task in the format:
-
-```
-- [ ] T001 [P1] [US1] Task description
-- [x] T002 [P2] [US1] Already completed task
+```bash
+parse_tasks "$TASKS"
 ```
 
-Extract for each task:
-- **Task ID**: e.g. `T001`
-- **Priority**: e.g. `P1` (from `[P1]`)
-- **Story reference**: e.g. `US1` (from `[US1]`)
-- **Description**: the rest of the line
-- **Status**: `[ ]` = open, `[x]` = complete
+This prints one line per task:
+
+```
+ID<TAB>STATUS<TAB>STORY<TAB>PRIORITY<TAB>PARALLEL<TAB>ISSUE<TAB>DESCRIPTION
+```
+
+It understands the spec-kit task format, where `[P]` marks a task that can run in parallel and `[US1]` the user story it belongs to:
+
+```
+- [ ] T001 Create project structure per implementation plan
+- [ ] T012 [P] [US1] Create User model in src/models/user.py
+- [X] T014 [US1] Implement UserService in src/services/user_service.py
+```
+
+- **STATUS** is `open` for `[ ]` and `done` for `[x]`/`[X]`.
+- **PRIORITY** is only set by a legacy `[P1]`-style marker. Otherwise the task inherits the priority of its story: look it up with `parse_stories "$FEATURE_SPEC"` (if `spec.md` exists).
+- **ISSUE** is set when the line already has a `<!-- gitlab:#42 -->` comment.
+
+Also note the phase heading (`## Phase N: ...`) each task is under; it goes into the issue description.
 
 ### Step 4: Check idempotency
 
-Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present). Skip tasks that already have a GitLab issue number there.
+```bash
+MAPPING_PATH="$(init_mapping_file "$FEATURE_DIR")"
+read_mapping "$MAPPING_PATH" tasks T001
+```
 
-Also check whether `tasks.md` already has GitLab URLs as comments (format: `<!-- gitlab:#123 -->`). Skip these tasks as well.
+Skip tasks that have a mapping entry or an ISSUE value from Step 3.
 
-### Step 5: Create GitLab issues
+### Step 5: Create the GitLab issues
 
 For each task not yet created:
 
-1. **Assemble labels:**
-   - Always: `spec-kit`, `task`
-   - If priority is set: `priority::1` (for P1), `priority::2` (for P2), etc.
-   - Story label: `story::US1` (if a story reference is present)
+1. **Labels:** `$GITLAB_SPECKIT_LABEL,$GITLAB_TASK_LABEL`, plus
+   - `priority::N` if `GITLAB_PRIORITY_TO_LABEL` is `true` and a priority is known (`priority_to_label P1`)
+   - `story::US1` if the task belongs to a story
+   - `parallel` is **not** a label; mention it in the description instead
 
-2. **Create the issue** via `glab`:
+2. **Description** (Markdown):
+   ```markdown
+   **Task ID:** T012
+   **Story:** US1 (#10)
+   **Priority:** P1
+   **Phase:** Phase 3: User Story 1 - Log in with SSO
+   **Parallelizable:** yes
+
+   Create User model in src/models/user.py
+   ```
+   Leave out lines that don't apply.
+
+3. **Linked story:** if `GITLAB_LINK_TASKS` is `true` and the story has an issue (`read_mapping "$MAPPING_PATH" stories US1`), pass its number so the issues are linked on creation.
+
+4. **Create the issue:**
    ```bash
-   glab issue create \
-     --repo "$GITLAB_PROJECT" \
-     --title "T001: Task description" \
-     --description "**Task ID:** T001\n**Priority:** P1\n**Story:** US1\n\nTask description" \
-     --label "spec-kit,task,priority::1,story::US1" \
-     --type "task" \
-     --milestone "$MILESTONE_TITLE" \
-     --yes
+   OUT="$(glab_create_issue "T012: Create User model in src/models/user.py" "$DESCRIPTION" "$LABELS" "$MILESTONE_TITLE" "$STORY_IID")"
+   ISSUE_URL="$(extract_issue_url "$OUT")"
+   ISSUE_NUMBER="$(extract_issue_number "$OUT")"
    ```
+   Use the title format `T012: <description>` (task ID once, then the description without markers). Pass an empty milestone if `GITLAB_FEATURE_TO_MILESTONE` isn't `true`. If no issue URL comes back, report the glab output as an error for this task and continue with the next one.
 
-   Only set the `--milestone` parameter if `feature_to_milestone: true` and `MILESTONE_TITLE` is set. Use `glab_create_issue` with the 5th parameter for the milestone.
-
-3. **Extract the issue URL and number** from the output.
-
-4. **Link to the story issue** (if `link_tasks_to_stories: true` and a story issue exists):
+5. **Set the issue type** (`task` by default, `issue` leaves it unchanged):
    ```bash
-   glab issue relation add <task-issue-nr> --related <story-issue-nr> --repo "$GITLAB_PROJECT"
+   glab_set_issue_type "$ISSUE_NUMBER" "$GITLAB_TASK_ISSUE_TYPE"
+   ```
+   If this prints a warning, the issue stays a regular issue; mention it once in the summary and suggest `task_issue_type: "issue"`.
+
+6. **If the task is already done** (`[x]`), close the new issue: `glab_close_issue "$ISSUE_NUMBER"`.
+
+7. **Record the issue right away** (so a later failure doesn't cause duplicates):
+   ```bash
+   write_mapping "$MAPPING_PATH" tasks T012 "$ISSUE_NUMBER" "$ISSUE_URL"
+   annotate_task_issue "$TASKS" T012 "$ISSUE_NUMBER"
+   ```
+   This adds a comment at the end of the line in `tasks.md`:
+   ```
+   - [ ] T012 [P] [US1] Create User model in src/models/user.py <!-- gitlab:#42 -->
    ```
 
-### Step 6: Update the mapping and tasks.md
+### Step 6: Summary
 
-1. **Update the mapping file** (`FEATURE_DIR/.gitlab-mapping.yml`):
-   ```yaml
-   tasks:
-     T001: "#42 https://gitlab.example.com/group/project/-/issues/42"
-     T002: "#43 https://gitlab.example.com/group/project/-/issues/43"
-   ```
-
-2. **Add GitLab references to tasks.md** (as an HTML comment at the end of the line):
-   ```
-   - [ ] T001 [P1] [US1] Task description <!-- gitlab:#42 -->
-   ```
-
-### Step 7: Summary
-
-Show an overview:
-- Number of issues created
-- Number of issues skipped (already present)
-- Links to the created issues
-- Any errors
+Show:
+- Number of issues created, with links
+- Number of tasks skipped (already present)
+- Errors and warnings, if any
+- Next step: `__SPECKIT_COMMAND_IMPLEMENT__`, then `__SPECKIT_COMMAND_GITLAB_CLOSE-ISSUES__` to close completed tasks in GitLab.
