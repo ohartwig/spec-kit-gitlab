@@ -97,8 +97,8 @@ assert_eq $'T010\topen\tUS1\t\tyes\t42\tContract test for endpoint in tests/cont
 assert_eq $'T1000\tdone\tUS2\t\tno\t\tImplement service (depends on T012)' "${TASKS[3]}" "four-digit task ID"
 assert_eq $'T003\topen\tUS1\tP1\tno\t\tLegacy priority marker' "${TASKS[4]}" "legacy [P1] priority marker"
 
-set_task_checkbox "$TMP/tasks.md" T001 done
-set_task_checkbox "$TMP/tasks.md" T002 open
+set_task_checkbox "$TMP/tasks.md" T001 "done"
+set_task_checkbox "$TMP/tasks.md" T002 "open"
 annotate_task_issue "$TMP/tasks.md" T001 7
 annotate_task_issue "$TMP/tasks.md" T001 7
 annotate_task_issue "$TMP/tasks.md" T010 99
