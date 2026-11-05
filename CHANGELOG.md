@@ -29,6 +29,7 @@ Brings the extension up to date with spec-kit 1.3 and the current glab CLI.
 - `--dry-run` for close-issues and sync, `--no-update` for status.
 - Offline tests (`tests/test-helpers.sh`) and a CI workflow.
 - `.extensionignore`, so tests and CI files aren't copied into projects.
+- Release workflow: pushing a `vX.Y.Z` tag publishes a GitHub release with an installable `spec-kit-gitlab.zip` and its SHA-256, so the extension installs with a single `specify extension add ... --from <release URL>`.
 
 ### Fixed
 

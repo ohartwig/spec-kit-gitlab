@@ -13,20 +13,37 @@ Supports gitlab.com and self-hosted GitLab instances.
 
 ## Installation
 
-```bash
-# Install and authenticate the glab CLI
-brew install glab jq
-glab auth login --hostname gitlab.example.com
+In your spec-kit project:
 
-# Install the extension into your spec-kit project
-cd /path/to/your/spec-kit-project
+```bash
+specify extension add gitlab --from https://github.com/ohartwig/spec-kit-gitlab/releases/download/v1.1.0/spec-kit-gitlab.zip
+```
+
+Then run the setup command `speckit.gitlab.init` in your coding agent. Done.
+
+On install, spec-kit copies the config template to `.specify/extensions/gitlab/gitlab-config.yml` and registers the commands for your coding agent. Each [release](https://github.com/ohartwig/spec-kit-gitlab/releases) lists its install command and the archive's SHA-256.
+
+If `glab` and `jq` aren't installed yet:
+
+```bash
+brew install glab jq          # macOS; other systems: https://gitlab.com/gitlab-org/cli#installation
+glab auth login --hostname gitlab.example.com
+```
+
+<details>
+<summary>Other ways to install</summary>
+
+```bash
+# Latest development version (main branch)
 specify extension add gitlab --from https://github.com/ohartwig/spec-kit-gitlab/archive/refs/heads/main.zip
 
-# ...or from a local clone (development mode)
+# From a local clone (development mode, picks up changes without reinstalling)
 specify extension add --dev ~/spec-kit-gitlab/
 ```
 
-On install, spec-kit copies the config template to `.specify/extensions/gitlab/gitlab-config.yml` and registers the commands for your coding agent.
+To update, run the install command of the new release with `--force`. Your `gitlab-config.yml` and `gitlab-config.local.yml` are kept.
+
+</details>
 
 ## Configuration
 

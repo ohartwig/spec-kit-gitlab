@@ -1,0 +1,80 @@
+name: Release
+
+# Push a tag like v1.1.0 to publish a release. The tag must match the version
+# in extension.yml, and CHANGELOG.md needs a "## [1.1.0]" section.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          MANIFEST_VERSION="$(grep -E '^[[:space:]]+version:' extension.yml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')"
+          if [[ "$VERSION" != "$MANIFEST_VERSION" ]]; then
+            echo "::error::Tag $TAG does not match extension.yml version $MANIFEST_VERSION"
+            exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be X.Y.Z (got $VERSION)"
+            exit 1
+          fi
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION"
+            exit 1
+          fi
+          if ! grep -q "/download/v$VERSION/" README.md; then
+            echo "::error::README.md install command doesn't point to v$VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        run: bash tests/test-helpers.sh
+
+      - name: Build archive
+        run: |
+          mkdir -p dist
+          zip -r -X dist/spec-kit-gitlab.zip \
+            extension.yml README.md LICENSE CHANGELOG.md .extensionignore \
+            gitlab-config.template.yml commands scripts
+          (cd dist && sha256sum spec-kit-gitlab.zip > spec-kit-gitlab.zip.sha256)
+          cat dist/spec-kit-gitlab.zip.sha256
+
+      - name: Release notes
+        run: |
+          awk -v v="${{ steps.version.outputs.version }}" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > dist/notes.md
+          {
+            echo
+            echo "## Install"
+            echo
+            echo '```bash'
+            echo "specify extension add gitlab --from https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/spec-kit-gitlab.zip"
+            echo '```'
+            echo
+            echo "SHA-256: \`$(cut -d' ' -f1 dist/spec-kit-gitlab.zip.sha256)\`"
+          } >> dist/notes.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/spec-kit-gitlab.zip dist/spec-kit-gitlab.zip.sha256 \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file dist/notes.md
