@@ -1,96 +1,97 @@
 ---
-description: "Update the status of GitLab issues in tasks.md and show an overview"
+description: "Show GitLab issue status and update tasks.md"
 scripts:
-  check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
-  gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
+  sh: ../../scripts/bash/check-prerequisites.sh --json --paths-only
+  ps: ../../scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly
 ---
 
-# Sync GitLab issue status
+# GitLab issue status
 
-Update the status of the tasks in `tasks.md` based on the current GitLab issue status and show an overview.
-
-## Prerequisites
-
-- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
-- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature directory with `tasks.md` and `.gitlab-mapping.yml` is present
+Shows an overview of the feature's GitLab issues and updates the checkboxes in `tasks.md` to match GitLab.
 
 ## User Input
 
+```text
 $ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty). `--no-update` means: only show the overview, don't change `tasks.md`.
+
+## Prerequisites
+
+- `glab` CLI is installed and authenticated (`glab auth login` or `GITLAB_TOKEN`), `jq` is installed
+- The GitLab configuration exists (`__SPECKIT_COMMAND_GITLAB_INIT__`)
+- The feature directory contains `tasks.md` and `.gitlab-mapping.yml`
+
+Run all commands from the project root. Shell state may not persist between your tool calls, so `source` the helpers in the same invocation as the functions you call.
 
 ## Steps
 
 ### Step 1: Determine the feature directory
 
-Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
-
-If no feature directory is found, inform the user and abort.
+Run `{SCRIPT}` from the project root and parse the JSON output for `FEATURE_DIR` and `TASKS`. All paths are absolute.
 
 ### Step 2: Load configuration
 
-Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
+```bash
+source .specify/extensions/gitlab/scripts/bash/gitlab-helpers.sh
+require_tools && load_gitlab_config
+MAPPING_PATH="$FEATURE_DIR/.gitlab-mapping.yml"
+```
 
-### Step 3: Load the mapping file
-
-Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml`. This contains the mapping of task IDs to GitLab issue numbers.
-
-If no mapping file exists, check `tasks.md` for `<!-- gitlab:#123 -->` comments and build a temporary mapping from those.
-
-If neither a mapping file nor comments are present:
-- Inform the user that `/speckit.gitlab.tasks-to-issues` must be run first
-- Abort
-
-### Step 4: Query the status of each issue
-
-For each issue number in the mapping file:
+### Step 3: Load the mapping
 
 ```bash
-glab issue view <issue-number> --repo "$GITLAB_PROJECT" --output json
+list_mapping_ids "$MAPPING_PATH" tasks
+list_mapping_ids "$MAPPING_PATH" stories
+parse_tasks "$TASKS"
 ```
 
-Extract:
-- **Status**: `opened` or `closed`
-- **Labels**: current labels
-- **Assignee**: assigned person (if any)
-- **Updated at**: last update date
+If there is no mapping file, build a temporary mapping from the ISSUE column of `parse_tasks` (`<!-- gitlab:#123 -->` comments).
 
-### Step 5: Update tasks.md
+If neither exists, tell the user to run `__SPECKIT_COMMAND_GITLAB_TASKS-TO-ISSUES__` first and abort.
 
-For each task with an assigned GitLab issue:
+### Step 4: Query the issues
 
-1. **Closed issue** → set `[x]` in tasks.md
-2. **Open issue** → set `[ ]` in tasks.md
-
-Only make actual changes (avoid unnecessary writes).
-
-### Step 6: Show the overview
-
-If a feature issue is present in the mapping file (a `feature:` entry), fetch its status and show it first:
+Fetch all spec-kit issues in one request:
 
 ```bash
-FEATURE_MAPPING="$(read_feature_mapping "$MAPPING_PATH")"
-if [[ -n "$FEATURE_MAPPING" ]]; then
-  FEATURE_ISSUE_NUMBER="$(extract_feature_issue_number "$FEATURE_MAPPING")"
-  # Fetch issue details via glab_view_issue
-fi
+glab_list_issues "$GITLAB_SPECKIT_LABEL" all \
+  | jq -r '.[] | [.iid, .state, ((.assignees // []) | map("@" + .username) | join(" ")), .updated_at] | @tsv'
 ```
 
-Show a formatted table:
+For mapped issues missing from that list, fall back to `glab_view_issue <iid>`.
+
+### Step 5: Detect discrepancies
+
+Compare the local checkbox (STATUS from `parse_tasks`) with the GitLab state. Collect tasks where they differ:
+- `[x]` locally, but the issue is open
+- `[ ]` locally, but the issue is closed
+
+### Step 6: Update tasks.md
+
+Unless `--no-update` was passed:
+
+- If there are no discrepancies, change nothing.
+- If the only discrepancies are issues closed in GitLab but open locally, update `tasks.md` with `set_task_checkbox "$TASKS" <ID> done`.
+- If there are tasks marked `[x]` locally whose issue is still open, don't silently uncheck them (that would undo local work). Show them and ask the user which side wins:
+  - **GitLab wins:** `set_task_checkbox "$TASKS" <ID> open`
+  - **Local wins:** suggest `__SPECKIT_COMMAND_GITLAB_CLOSE-ISSUES__`
+
+### Step 7: Show the overview
 
 ```
-Feature: #232 - user-authentication (Open)
+Feature: #232 - <title> (Open)
 URL: https://gitlab.example.com/.../issues/232
 ================================================
 
 GitLab issue status for feature: <feature-name>
-================================================
 
-| Task  | GitLab  | Status      | Assignee    |
-|-------|---------|-------------|-------------|
-| T001  | #42     | ✅ Closed   | @username   |
-| T002  | #43     | 🔄 Open    | @other      |
-| T003  | #44     | 🔄 Open    | -           |
+| Task  | GitLab | Status    | Assignee  |
+|-------|--------|-----------|-----------|
+| T001  | #42    | ✅ Closed | @username |
+| T002  | #43    | 🔄 Open   | @other    |
+| T003  | #44    | 🔄 Open   | -         |
 
 Summary:
   Open:      2
@@ -98,16 +99,12 @@ Summary:
   Total:     3
   Progress:  33%
 
-Stories:
-| Story | GitLab  | Status      |
-|-------|---------|-------------|
-| US1   | #10     | 🔄 Open    |
+| Story | GitLab | Status  | Tasks done |
+|-------|--------|---------|------------|
+| US1   | #10    | 🔄 Open | 1/3        |
 
+Tasks without an issue: T004, T005
 Last updated: <current date/time>
 ```
 
-### Step 7: Bidirectional warning
-
-If there are discrepancies (e.g. a task marked `[x]` in tasks.md but the GitLab issue is still open):
-- Show a warning with the affected tasks
-- Ask the user whether the GitLab status or the local status should take precedence
+Leave out the feature block if no feature issue is mapped, and the "without an issue" line if there are none.

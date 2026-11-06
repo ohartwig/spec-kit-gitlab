@@ -1,0 +1,5 @@
+# Files not copied into a project by `specify extension add`
+tests/
+.github/
+.gitignore
+CHANGELOG.md

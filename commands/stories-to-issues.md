@@ -1,138 +1,130 @@
 ---
 description: "Create user stories from spec.md as GitLab issues"
 scripts:
-  check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
-  gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
+  sh: ../../scripts/bash/check-prerequisites.sh --json --paths-only
+  ps: ../../scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly
 ---
 
 # Create user stories as GitLab issues
 
-Create a parent GitLab issue for each user story in `spec.md`.
-
-## Prerequisites
-
-- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
-- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature directory with `spec.md` is present
+Create a GitLab issue for each user story in `spec.md`.
 
 ## User Input
 
+```text
 $ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty). It may limit the run to specific stories (e.g. `US1 US3`).
+
+## Prerequisites
+
+- `glab` CLI is installed and authenticated (`glab auth login` or `GITLAB_TOKEN`), `jq` is installed
+- The GitLab configuration exists (`__SPECKIT_COMMAND_GITLAB_INIT__`)
+- The feature directory contains `spec.md`
+
+Run all commands from the project root. Shell state may not persist between your tool calls, so `source` the helpers in the same invocation as the functions you call.
 
 ## Steps
 
 ### Step 1: Determine the feature directory
 
-Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory. The feature directory contains `spec.md`.
+Run `{SCRIPT}` from the project root and parse the JSON output for `FEATURE_DIR` and `FEATURE_SPEC`. All paths are absolute.
 
-If no feature directory is found, inform the user and abort.
+If the script fails or `FEATURE_SPEC` doesn't exist, tell the user to run `__SPECKIT_COMMAND_SPECIFY__` first and abort.
 
 ### Step 2: Load configuration
 
-Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
+```bash
+source .specify/extensions/gitlab/scripts/bash/gitlab-helpers.sh
+require_tools && load_gitlab_config
+```
 
-The following values are needed:
-- `GITLAB_URL` - URL of the GitLab server
-- `GITLAB_PROJECT` - project path
-- Labels: `spec-kit`, `user-story`
-- `GITLAB_FEATURE_TO_MILESTONE` - whether the feature is mapped to a milestone
+If this fails, show the error and point the user to `__SPECKIT_COMMAND_GITLAB_INIT__`.
 
-If `feature_to_milestone: true`, determine the feature name from the feature directory (directory name) and make sure a corresponding milestone exists in GitLab:
+If `GITLAB_FEATURE_TO_MILESTONE` is `true`, make sure the feature milestone exists:
 
 ```bash
 MILESTONE_TITLE="$(glab_ensure_milestone "$(get_feature_name "$FEATURE_DIR")")"
 ```
 
-### Step 3: Read spec.md and extract user stories
+### Step 3: Extract the user stories from spec.md
 
-Read the `spec.md` file in the feature directory. Extract all user stories. User stories are typically in this format:
-
-```markdown
-## User Stories
-
-### US1: Story title [P1]
-As a <role> I want <capability>, so that <benefit>.
-
-**Acceptance criteria:**
-- Criterion 1
-- Criterion 2
-
-### US2: Story title [P2]
-...
+```bash
+parse_stories "$FEATURE_SPEC"
 ```
 
-Extract for each story:
-- **Story ID**: e.g. `US1`
-- **Title**: e.g. "Story title"
-- **Priority**: e.g. `P1`
-- **Description**: the user story in "As a... I want... so that..." format
-- **Acceptance criteria**: list of criteria
+This prints one line per story: `ID<TAB>PRIORITY<TAB>TITLE`. It understands the spec-kit template heading and the legacy format:
+
+```markdown
+### User Story 1 - Log in with SSO (Priority: P1)
+### US1: Log in with SSO [P1]
+```
+
+Both become story ID `US1`. For each story, also read its section from `spec.md` (up to the next `###` heading or `---`):
+- **Description**: the plain-language user journey
+- **Why this priority** (if present)
+- **Independent Test** (if present)
+- **Acceptance Scenarios**: the numbered Given/When/Then list
+
+If no stories are found, tell the user and abort.
 
 ### Step 4: Check idempotency
 
-Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present). Skip stories that already have a GitLab issue number there.
+```bash
+MAPPING_PATH="$(init_mapping_file "$FEATURE_DIR")"
+read_mapping "$MAPPING_PATH" stories US1   # prints "#10 https://..." if already created
+```
 
-### Step 5: Create GitLab issues
+Skip stories that already have an entry.
+
+### Step 5: Create the GitLab issues
+
+If a feature issue is mapped, look it up once so new stories are linked to it:
+
+```bash
+FEATURE_IID="$(extract_feature_issue_number "$(read_feature_mapping "$MAPPING_PATH")")"
+```
 
 For each story not yet created:
 
-1. **Assemble labels:**
-   - Always: `spec-kit`, `user-story`
-   - If priority is set: `priority::1` (for P1), `priority::2` (for P2), etc.
+1. **Labels:** `$GITLAB_SPECKIT_LABEL,$GITLAB_STORY_LABEL`, plus `priority_to_label P1` (→ `priority::1`) if `GITLAB_PRIORITY_TO_LABEL` is `true` and the story has a priority.
 
-2. **Format the issue description:**
+2. **Description** (Markdown):
    ```markdown
    **Story ID:** US1
    **Priority:** P1
+   **Feature:** <feature name>
 
    ## User Story
-   As a <role> I want <capability>, so that <benefit>.
+   <description>
+
+   **Why this priority:** <text>
+
+   **Independent Test:** <text>
 
    ## Acceptance Criteria
-   - [ ] Criterion 1
-   - [ ] Criterion 2
+   - [ ] **Given** ..., **When** ..., **Then** ...
    ```
+   Leave out sections that are empty.
 
-3. **Create the issue** via `glab`:
+3. **Create the issue** (the 5th argument links it to the feature issue, if any):
    ```bash
-   glab issue create \
-     --repo "$GITLAB_PROJECT" \
-     --title "US1: Story title" \
-     --description "<formatted description>" \
-     --label "spec-kit,user-story,priority::1" \
-     --milestone "$MILESTONE_TITLE" \
-     --yes
+   OUT="$(glab_create_issue "US1: Log in with SSO" "$DESCRIPTION" "$LABELS" "$MILESTONE_TITLE" "$FEATURE_IID")"
+   ISSUE_URL="$(extract_issue_url "$OUT")"
+   ISSUE_NUMBER="$(extract_issue_number "$OUT")"
    ```
+   Pass an empty milestone if `GITLAB_FEATURE_TO_MILESTONE` isn't `true`. If no issue URL comes back, report the glab output as an error for this story and continue with the next one.
 
-   Only set the `--milestone` parameter if `feature_to_milestone: true` and `MILESTONE_TITLE` is set. Use `glab_create_issue` with the 5th parameter for the milestone.
-
-4. **Extract the issue URL and number** from the output.
-
-5. **Link to the feature issue:**
-   If `feature:` is set in `.gitlab-mapping.yml`, link the newly created story issue to the feature issue:
+4. **Write the mapping right away** (so a later failure doesn't cause duplicates):
    ```bash
-   FEATURE_MAPPING="$(read_feature_mapping "$MAPPING_PATH")"
-   if [[ -n "$FEATURE_MAPPING" ]]; then
-     FEATURE_ISSUE_NUMBER="$(extract_feature_issue_number "$FEATURE_MAPPING")"
-     glab_add_relation "$STORY_ISSUE_NUMBER" "$FEATURE_ISSUE_NUMBER"
-   fi
+   write_mapping "$MAPPING_PATH" stories US1 "$ISSUE_NUMBER" "$ISSUE_URL"
    ```
 
-### Step 6: Update the mapping file
+### Step 6: Summary
 
-Write/update the mapping file `FEATURE_DIR/.gitlab-mapping.yml`:
-
-```yaml
-stories:
-  US1: "#10 https://gitlab.example.com/group/project/-/issues/10"
-  US2: "#11 https://gitlab.example.com/group/project/-/issues/11"
-tasks: {}
-```
-
-### Step 7: Summary
-
-Show an overview:
-- Number of story issues created
+Show:
+- Number of story issues created, with links
 - Number of stories skipped (already present)
-- Links to the created issues
-- Note: "Run `/speckit.gitlab.tasks-to-issues` to link tasks with these stories."
+- Errors, if any
+- Next step: run `__SPECKIT_COMMAND_GITLAB_TASKS-TO-ISSUES__` after `__SPECKIT_COMMAND_TASKS__` to create tasks linked to these stories.

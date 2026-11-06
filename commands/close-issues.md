@@ -1,115 +1,114 @@
 ---
 description: "Close completed tasks/stories in GitLab, reopen reopened ones"
 scripts:
-  check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
-  gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
+  sh: ../../scripts/bash/check-prerequisites.sh --json --paths-only
+  ps: ../../scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly
 ---
 
 # Close completed issues in GitLab
 
-Syncs the local completion status (checkboxes in `tasks.md`) to GitLab: completed tasks/stories are closed, reopened ones are reopened.
-
-## Prerequisites
-
-- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
-- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature directory with `tasks.md` and `.gitlab-mapping.yml` is present
+Pushes the local completion status (checkboxes in `tasks.md`) to GitLab: completed tasks and stories are closed, reopened ones are reopened. This is the push direction; `__SPECKIT_COMMAND_GITLAB_SYNC__` pulls the GitLab status into `tasks.md`.
 
 ## User Input
 
+```text
 $ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty). `--dry-run` means: show what would change, but don't change anything in GitLab.
+
+## Prerequisites
+
+- `glab` CLI is installed and authenticated (`glab auth login` or `GITLAB_TOKEN`), `jq` is installed
+- The GitLab configuration exists (`__SPECKIT_COMMAND_GITLAB_INIT__`)
+- The feature directory contains `tasks.md` and `.gitlab-mapping.yml` (`__SPECKIT_COMMAND_GITLAB_TASKS-TO-ISSUES__`)
+
+Run all commands from the project root. Shell state may not persist between your tool calls, so `source` the helpers in the same invocation as the functions you call.
 
 ## Steps
 
 ### Step 1: Determine the feature directory
 
-Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
-
-If no feature directory is found, inform the user and abort.
+Run `{SCRIPT}` from the project root and parse the JSON output for `FEATURE_DIR` and `TASKS`. All paths are absolute.
 
 ### Step 2: Load configuration
 
-Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
+```bash
+source .specify/extensions/gitlab/scripts/bash/gitlab-helpers.sh
+require_tools && load_gitlab_config
+```
 
 ### Step 3: Load the mapping file and tasks.md
 
-Read the mapping file `FEATURE_DIR/.gitlab-mapping.yml`. If no mapping file exists:
-- Inform the user that `/speckit.gitlab.tasks-to-issues` must be run first
-- Abort
+The mapping file is `$FEATURE_DIR/.gitlab-mapping.yml`. If it doesn't exist, tell the user to run `__SPECKIT_COMMAND_GITLAB_TASKS-TO-ISSUES__` first and abort.
 
-Read `tasks.md` in the feature directory and extract for each task:
-- **Task ID**: e.g. `T001`
-- **Status**: `[x]` = complete, `[ ]` = open
+```bash
+MAPPING_PATH="$FEATURE_DIR/.gitlab-mapping.yml"
+list_mapping_ids "$MAPPING_PATH" tasks     # T001<TAB>#42 https://...
+list_mapping_ids "$MAPPING_PATH" stories   # US1<TAB>#10 https://...
+parse_tasks "$TASKS"                       # ID, STATUS (open/done), STORY, ...
+```
+
+A task's issue number comes from the mapping or, if missing there, from the ISSUE column (`<!-- gitlab:#42 -->`).
 
 ### Step 4: Query the current GitLab status
 
-For each issue number in the mapping file (both the `tasks:` and `stories:` sections), fetch the current status:
+Fetch the state of all mapped issues in one request instead of one call per issue:
 
 ```bash
-glab_view_issue "$ISSUE_NUMBER"
+glab_list_issues "$GITLAB_SPECKIT_LABEL" all | jq -r '.[] | "\(.iid)\t\(.state)"'
 ```
 
-Extract the `state` (`opened` or `closed`).
+For mapped issues missing from that list (for example because the label was removed), fall back to `glab_issue_state <iid>`.
 
-### Step 5: Reconcile tasks and close/reopen issues
+### Step 5: Reconcile tasks
 
-For each task in the mapping file:
+For each mapped task:
 
-1. **Complete locally (`[x]`) + open in GitLab (`opened`)** → Close the issue:
-   ```bash
-   glab_close_issue "$ISSUE_NUMBER"
-   ```
+1. **Done locally + `opened` in GitLab** → `glab_close_issue <iid>`
+2. **Open locally + `closed` in GitLab** → `glab_reopen_issue <iid>`
+3. **Status matches** → skip
 
-2. **Open locally (`[ ]`) + closed in GitLab (`closed`)** → Reopen the issue:
-   ```bash
-   glab_reopen_issue "$ISSUE_NUMBER"
-   ```
-
-3. **Status matches** → Skip
+A task that is in the mapping but no longer in `tasks.md` is reported as "orphaned" and left unchanged.
 
 ### Step 6: Reconcile stories
 
-Stories have no checkboxes in `spec.md`. Instead, a story is considered complete when **all its tasks** are complete.
+Stories have no checkboxes in `spec.md`. A story counts as done when **all** tasks with its `[USx]` marker are done.
 
-For each story in the mapping file:
+For each mapped story:
 
-1. Determine all tasks that belong to this story (tasks with a `[USx]` reference in `tasks.md`)
-2. If **all** associated tasks have `[x]` and the story issue is open → close the issue
-3. If **not all** tasks are complete and the story issue is closed → reopen the issue
-4. If the story has no tasks → skip
+1. All its tasks done + story issue `opened` → close it
+2. Not all tasks done + story issue `closed` → reopen it
+3. Story has no tasks → skip
 
-### Step 7: Reconcile the feature issue (optional)
+### Step 7: Reconcile the feature issue
 
-If a feature issue is present in the mapping file (a `feature:` entry):
+If a feature issue is mapped (`read_feature_mapping "$MAPPING_PATH"`):
 
-1. Check whether **all** story issues are closed
-2. If yes and the feature issue is open → ask the user:
+1. All story issues closed (and all tasks done) + feature issue open → ask the user:
    > All stories are complete. Should feature issue #232 be closed?
-3. If not all stories are complete and the feature issue is closed → inform the user:
+2. Open stories or tasks + feature issue closed → ask the user:
    > Feature issue #232 is closed, but there are still open stories. Should it be reopened?
 
-### Step 8: Summary
+Never close or reopen the feature issue without the user's confirmation.
 
-Show an overview:
+### Step 8: Summary
 
 ```
 Issues closed/reopened for feature: <feature-name>
 ========================================================
 
 Closed:
-  T001 → #42 (closed)
-  T003 → #44 (closed)
-  US1  → #10 (closed, all tasks complete)
+  T001 → #42
+  T003 → #44
+  US1  → #10 (all tasks complete)
 
 Reopened:
-  T002 → #43 (reopened)
+  T002 → #43
 
-Unchanged:
-  T004 → #45 (already closed)
-  T005 → #46 (already open)
+Unchanged: 2   Orphaned: 0
 
-Summary:
-  Closed: 3
-  Reopened: 1
-  Unchanged: 2
+Closed: 3   Reopened: 1
 ```
+
+With `--dry-run`, show the same table under the heading "Would change" and change nothing.

@@ -1,109 +1,112 @@
 ---
 description: "Import and sync GitLab issues into spec-kit files"
 scripts:
-  check-prerequisites.sh: "../../scripts/check-prerequisites.sh"
-  gitlab-helpers.sh: "../scripts/bash/gitlab-helpers.sh"
+  sh: ../../scripts/bash/check-prerequisites.sh --json --paths-only
+  ps: ../../scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly
 ---
 
 # Sync GitLab issues
 
-Sync GitLab issues with the local spec-kit files (`tasks.md`).
-
-## Prerequisites
-
-- `glab` CLI is installed and authenticated (`GITLAB_TOKEN` set)
-- GitLab configuration exists (`.specify/extensions/gitlab/gitlab-config.yml`)
-- Feature directory with `tasks.md` is present
+Pulls the GitLab issue status into the local `tasks.md` (GitLab → local). Optionally imports issues that don't exist locally yet. The opposite direction is `__SPECKIT_COMMAND_GITLAB_CLOSE-ISSUES__`.
 
 ## User Input
 
+```text
 $ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty). Supported flags:
+- `--import`: also add GitLab issues that aren't in `tasks.md` yet
+- `--dry-run`: show what would change, don't write files
+
+## Prerequisites
+
+- `glab` CLI is installed and authenticated (`glab auth login` or `GITLAB_TOKEN`), `jq` is installed
+- The GitLab configuration exists (`__SPECKIT_COMMAND_GITLAB_INIT__`)
+- The feature directory contains `tasks.md`
+
+Run all commands from the project root. Shell state may not persist between your tool calls, so `source` the helpers in the same invocation as the functions you call.
 
 ## Steps
 
 ### Step 1: Determine the feature directory
 
-Use `{SCRIPT:check-prerequisites.sh}` to determine the current feature directory.
+Run `{SCRIPT}` from the project root and parse the JSON output for `FEATURE_DIR` and `TASKS`. All paths are absolute.
 
-If no feature directory is found, inform the user and abort.
+If `TASKS` doesn't exist, tell the user to run `__SPECKIT_COMMAND_TASKS__` first and abort.
 
 ### Step 2: Load configuration
 
-Load the GitLab configuration from `.specify/extensions/gitlab/gitlab-config.yml`. Use the helper functions from `{SCRIPT:gitlab-helpers.sh}`.
-
-### Step 3: Fetch the feature issue and issues from GitLab
-
-If a feature issue is present in the mapping file (a `feature:` entry), fetch its current status:
-
 ```bash
-FEATURE_MAPPING="$(read_feature_mapping "$MAPPING_PATH")"
-if [[ -n "$FEATURE_MAPPING" ]]; then
-  FEATURE_ISSUE_NUMBER="$(extract_feature_issue_number "$FEATURE_MAPPING")"
-  FEATURE_STATUS="$(glab_view_issue "$FEATURE_ISSUE_NUMBER" | jq -r '.state')"
-fi
+source .specify/extensions/gitlab/scripts/bash/gitlab-helpers.sh
+require_tools && load_gitlab_config
+MAPPING_PATH="$(init_mapping_file "$FEATURE_DIR")"
 ```
 
-Load all issues with the `spec-kit` label from the configured GitLab project:
+### Step 3: Fetch the feature issue and the issues from GitLab
+
+If a feature issue is mapped, fetch it:
 
 ```bash
-# All issues with the spec-kit label (open and closed)
-glab issue list --repo "$GITLAB_PROJECT" --label "spec-kit" --state all --output json
+FEATURE_IID="$(extract_feature_issue_number "$(read_feature_mapping "$MAPPING_PATH")")"
+[[ -n "$FEATURE_IID" ]] && glab_view_issue "$FEATURE_IID" | jq '{iid, title, state, web_url}'
 ```
 
-Parse the JSON output and extract for each issue:
-- **Issue number**: e.g. `#42`
-- **Title**: e.g. "T001: Task description"
-- **Status**: `opened` or `closed`
-- **Labels**: all labels of the issue
-- **URL**: web URL of the issue
+Load all issues with the spec-kit label (all pages, open and closed):
 
-### Step 4: Load the mapping file
+```bash
+glab_list_issues "$GITLAB_SPECKIT_LABEL" all \
+  | jq -r '.[] | [.iid, .state, (.labels | join(",")), .web_url, .title] | @tsv'
+```
 
-Read the existing mapping file `FEATURE_DIR/.gitlab-mapping.yml` (if present).
+If `GITLAB_FEATURE_TO_MILESTONE` is `true`, only consider issues in this feature's milestone (`.milestone.title == <feature name>`), so issues of other features aren't imported.
+
+### Step 4: Match issues to tasks
+
+```bash
+parse_tasks "$TASKS"
+list_mapping_ids "$MAPPING_PATH" tasks
+```
+
+A task is matched to an issue by, in this order:
+1. the mapping file entry
+2. the `<!-- gitlab:#42 -->` comment on its line
+3. the issue title: a task ID matching `\bT\d{3,}\b` (e.g. `T012: ...`)
 
 ### Step 5: Update tasks.md
 
-For each issue referenced in the mapping file or in `tasks.md` (via a `<!-- gitlab:#123 -->` comment):
+For each matched task whose status differs:
 
-1. **Closed issues**: set the checkbox to `[x]`
-   ```
-   - [x] T001 [P1] [US1] Task description <!-- gitlab:#42 -->
-   ```
-
-2. **Open issues**: set the checkbox to `[ ]`
-   ```
-   - [ ] T002 [P2] [US1] Other task description <!-- gitlab:#43 -->
-   ```
-
-### Step 6: Import new issues (optional)
-
-If the user passed `--import` as an argument or confirms it:
-
-For each GitLab issue with the `spec-kit` label that is NOT yet in `tasks.md`:
-
-1. Determine the task ID from the issue title (e.g. "T001" from "T001: Description")
-2. If there's no task ID in the title: generate the next free task ID
-3. Determine the priority from labels (e.g. `priority::1` → `P1`)
-4. Determine the story reference from labels (e.g. `story::US1` → `US1`)
-5. Append the task at the end of `tasks.md`:
-   ```
-   - [ ] T099 [P2] [US3] Imported task description <!-- gitlab:#99 -->
-   ```
-
-### Step 7: Update the mapping file
-
-Update the mapping file with all new assignments.
-
-### Step 8: Summary
-
-If a feature issue is present, show its status first:
-```
-Feature: #232 - user-authentication (Open)
+```bash
+set_task_checkbox "$TASKS" T012 done   # issue closed
+set_task_checkbox "$TASKS" T013 open   # issue opened
 ```
 
-Show an overview:
-- Feature issue status (if present)
-- Number of tasks updated (status changed)
-- Number of tasks newly imported (if --import)
-- Number of tasks unchanged
-- Any conflicts or warnings
+Only touch lines whose status really changes. If a matched task had no mapping entry yet, add it (`write_mapping`) and the line comment (`annotate_task_issue`).
+
+### Step 6: Import new issues (only with `--import`, or after the user confirms)
+
+For each issue that isn't matched to a task and has the `$GITLAB_TASK_LABEL` label (story and feature issues are never imported as tasks):
+
+1. **Task ID:** from the title (`T099: ...`); otherwise the next free ID (highest existing ID + 1, at least three digits)
+2. **Story:** from a `story::US1` label
+3. **Description:** the title without the task ID prefix
+4. Append the task to the end of `tasks.md` under a heading `## Imported from GitLab` (create it once):
+   ```
+   - [ ] T099 [US3] Imported task description <!-- gitlab:#99 -->
+   ```
+   Use `[x]` for closed issues. Don't add a `[P]` marker: whether it can run in parallel is unknown.
+5. Write the mapping: `write_mapping "$MAPPING_PATH" tasks T099 99 "$URL"`
+
+### Step 7: Summary
+
+If a feature issue is mapped, show it first:
+```
+Feature: #232 - <title> (Open)
+```
+
+Then:
+- Tasks updated (status changed), with the direction (open → done, done → open)
+- Tasks newly imported (with `--import`)
+- Tasks unchanged
+- Warnings: mapped issues that no longer exist, tasks without an issue (suggest `__SPECKIT_COMMAND_GITLAB_TASKS-TO-ISSUES__`)

@@ -2,34 +2,52 @@
 
 GitLab integration for [spec-kit](https://github.com/github/spec-kit): create issues, sync, and post status updates via the `glab` CLI.
 
-Supports self-hosted GitLab instances.
+Supports gitlab.com and self-hosted GitLab instances.
 
 ## Requirements
 
-- **spec-kit** >= 0.1.0
-- **glab CLI** >= 1.0.0 ([GitLab CLI](https://gitlab.com/gitlab-org/cli))
+- **spec-kit** >= 0.12.17 (tested against the 1.3 extension format)
+- **glab CLI** >= 1.50.0 ([GitLab CLI](https://gitlab.com/gitlab-org/cli))
+- **jq**
+- **bash** (macOS, Linux, or Git Bash/WSL on Windows)
 
 ## Installation
 
-```bash
-# Install and authenticate the glab CLI
-brew install glab
-glab auth login --hostname gitlab.example.com
+In your spec-kit project:
 
-# Install the extension (development mode)
-cd /path/to/your/spec-kit-project
+```bash
+specify extension add gitlab --from https://github.com/ohartwig/spec-kit-gitlab/releases/download/v1.1.0/spec-kit-gitlab.zip
+```
+
+Then run the setup command `speckit.gitlab.init` in your coding agent. Done.
+
+On install, spec-kit copies the config template to `.specify/extensions/gitlab/gitlab-config.yml` and registers the commands for your coding agent. Each [release](https://github.com/ohartwig/spec-kit-gitlab/releases) lists its install command and the archive's SHA-256.
+
+If `glab` and `jq` aren't installed yet:
+
+```bash
+brew install glab jq          # macOS; other systems: https://gitlab.com/gitlab-org/cli#installation
+glab auth login --hostname gitlab.example.com
+```
+
+<details>
+<summary>Other ways to install</summary>
+
+```bash
+# Latest development version (main branch)
+specify extension add gitlab --from https://github.com/ohartwig/spec-kit-gitlab/archive/refs/heads/main.zip
+
+# From a local clone (development mode, picks up changes without reinstalling)
 specify extension add --dev ~/spec-kit-gitlab/
 ```
 
+To update, run the install command of the new release with `--force`. Your `gitlab-config.yml` and `gitlab-config.local.yml` are kept.
+
+</details>
+
 ## Configuration
 
-The easiest way is via the interactive setup:
-
-```bash
-/speckit.gitlab.init
-```
-
-This creates the configuration file at `.specify/extensions/gitlab/gitlab-config.yml`:
+The easiest way is the interactive setup command (`speckit.gitlab.init`, see [Invoking the commands](#invoking-the-commands)). It writes `.specify/extensions/gitlab/gitlab-config.yml`:
 
 ```yaml
 gitlab:
@@ -43,82 +61,90 @@ labels:
   feature_label: "feature"
 
 mapping:
-  priority_to_label: true          # P1/P2/P3 → priority::1/2/3
-  feature_to_milestone: true       # Feature name as a GitLab milestone
+  priority_to_label: true          # Story priority P1/P2/P3 → priority::1/2/3
+  feature_to_milestone: true       # Feature directory name as a GitLab milestone
   feature_to_issue: true           # Create the feature as a GitLab issue
-  link_tasks_to_stories: true      # Link tasks to story issues
+  link_tasks_to_stories: true      # Link task issues to story issues
+  task_issue_type: "task"          # GitLab type for task issues: "task" or "issue"
 ```
 
-Alternatively, via environment variables:
+Configuration is resolved in this order (highest first):
 
-```bash
-export GITLAB_URL="https://gitlab.example.com"
-export GITLAB_PROJECT="group/project"
-export GITLAB_TOKEN="glpat-xxxxxxxxxxxx"
-```
+1. Environment variables `GITLAB_URL` and `GITLAB_PROJECT`
+2. Local overrides in `.specify/extensions/gitlab/gitlab-config.local.yml` (per key, not committed, kept on reinstall)
+3. `.specify/extensions/gitlab/gitlab-config.yml`
+4. Built-in defaults
+
+Authentication is handled entirely by `glab` (`glab auth login`, or `GITLAB_TOKEN` with the `api` scope). Never put a token in the config file.
+
+## Invoking the commands
+
+The command names below are the extension's command IDs. How you type them depends on your coding agent, for example `/speckit.gitlab.init` for agents with slash commands, or `/speckit-gitlab-init` for agents that use skills (such as GitHub Copilot's skills layout). See spec-kit's [command invocation reference](https://github.com/github/spec-kit/blob/main/docs/integrations/cli.md#command-invocation).
 
 ## Commands
 
-### `/speckit.gitlab.init`
+### `speckit.gitlab.init`
 
-Interactive setup of the GitLab configuration. Checks the `glab` installation, tests the connection, and writes the configuration file.
+Interactive setup of the GitLab configuration. Checks `glab` and `jq`, suggests values from the git remote, tests the connection, and writes the configuration file.
 
-### `/speckit.gitlab.feature-to-issue`
+### `speckit.gitlab.feature-to-issue`
 
-Creates a GitLab issue for the current feature and links existing story issues to it. Uses the feature directory name as the title and the context from `spec.md` as the description. Labels: `spec-kit`, `feature`.
+Creates a GitLab issue for the current feature and links existing story issues to it. Uses the feature name from `spec.md` as the title and the overview section as the description. Labels: `spec-kit`, `feature`.
 
-### `/speckit.gitlab.import-feature`
+### `speckit.gitlab.import-feature`
 
-Imports an existing GitLab issue as a feature. Argument: issue number (e.g. `232` or `#232`). Writes the mapping, optionally creates a `spec.md` from the issue description, and links existing stories.
+Imports an existing GitLab issue as a feature. Argument: issue number (`232`, `#232`) or issue URL. Writes the mapping, optionally seeds `spec.md` from the issue description, and links existing stories.
 
-### `/speckit.gitlab.stories-to-issues`
+### `speckit.gitlab.stories-to-issues`
 
-Creates GitLab issues for all user stories from `spec.md`. Expects the format `### US1: Title [P1]` and automatically assigns labels (`spec-kit`, `user-story`, `priority::X`). Automatically links new stories to the feature issue (if one exists).
+Creates GitLab issues for all user stories in `spec.md`. Reads the spec-kit template format `### User Story 1 - Title (Priority: P1)` (the older `### US1: Title [P1]` still works) and sets the labels `spec-kit`, `user-story`, and `priority::N`. New stories are linked to the feature issue, if there is one.
 
-### `/speckit.gitlab.tasks-to-issues`
+### `speckit.gitlab.tasks-to-issues`
 
-Creates GitLab issues (Type: Task) for all tasks from `tasks.md`. Expects the format `- [ ] T001 [P1] [US1] Description`. Automatically links tasks to their story issues.
+Creates GitLab issues (type *Task* by default) for all tasks in `tasks.md`. Reads the spec-kit format `- [ ] T012 [P] [US1] Description`, where `[P]` marks a parallelizable task and `[US1]` the story. Tasks inherit the priority of their story and are linked to the story issue.
 
-### `/speckit.gitlab.close-issues`
+### `speckit.gitlab.close-issues`
 
-Syncs the local completion status to GitLab. Tasks marked `[x]` in `tasks.md` are closed in GitLab; tasks reopened (`[ ]`) are reopened. Stories are automatically closed once all their tasks are complete.
+Pushes the local completion status to GitLab. Tasks marked `[x]`/`[X]` in `tasks.md` are closed in GitLab, tasks reopened (`[ ]`) are reopened. Stories are closed once all their tasks are complete. Supports `--dry-run`.
 
-### `/speckit.gitlab.sync`
+### `speckit.gitlab.sync`
 
-Syncs GitLab issue status into the local `tasks.md` files. Updates checkboxes based on issue status (open/closed). Shows the feature issue status (if one exists). Optional: imports new GitLab issues with `--import`.
+Pulls the GitLab issue status into `tasks.md` (closed → `[x]`, open → `[ ]`) and shows the feature issue status. With `--import`, adds GitLab task issues that aren't in `tasks.md` yet. Supports `--dry-run`.
 
-### `/speckit.gitlab.status`
+### `speckit.gitlab.status`
 
-Shows an overview of all GitLab issues with their current status (task ID, issue number, status, assignee) and updates `tasks.md`. Shows the feature issue status at the top of the overview. Includes progress statistics (open, closed, percent).
+Shows an overview of all issues of the feature (task ID, issue number, status, assignee, story progress) and updates `tasks.md`. If local and GitLab status contradict each other, it asks which side wins. `--no-update` only shows the overview.
 
 ## Workflow
 
-### Push workflow (Local → GitLab)
+### Push workflow (local → GitLab)
 
 ```
-1. /speckit.gitlab.init              → Set up the GitLab connection
-2. /speckit.spec                     → Create spec.md
-3. /speckit.gitlab.feature-to-issue  → Create the feature as a GitLab issue
-4. /speckit.tasks                    → Generate tasks.md
-5. /speckit.gitlab.stories-to-issues → Stories as GitLab issues (linked to the feature)
-6. /speckit.gitlab.tasks-to-issues   → Tasks as GitLab issues (linked to stories)
-7. /speckit.gitlab.close-issues      → Close completed issues in GitLab
-8. /speckit.gitlab.status            → Sync status
+1. speckit.gitlab.init               → Set up the GitLab connection
+2. speckit.specify                   → Create spec.md
+3. speckit.gitlab.feature-to-issue   → Feature as a GitLab issue
+4. speckit.gitlab.stories-to-issues  → Stories as GitLab issues (linked to the feature)
+5. speckit.plan, speckit.tasks       → Plan and generate tasks.md
+6. speckit.gitlab.tasks-to-issues    → Tasks as GitLab issues (linked to stories)
+7. speckit.implement                 → Implement
+8. speckit.gitlab.close-issues       → Close completed issues in GitLab
 ```
 
-### Pull workflow (GitLab → Local)
+### Pull workflow (GitLab → local)
 
 ```
-1. /speckit.gitlab.import-feature 232  → Import an existing issue as a feature
-2. /speckit.spec                       → Create/refine the specification
-3. /speckit.tasks                      → Generate tasks
-4. /speckit.gitlab.stories-to-issues   → Stories as GitLab issues
-5. /speckit.gitlab.tasks-to-issues     → Tasks as GitLab issues
+1. speckit.specify <issue title>       → Start the feature in spec-kit
+2. speckit.gitlab.import-feature 232   → Link the feature to the existing issue
+3. speckit.clarify                     → Refine the specification
+4. speckit.gitlab.stories-to-issues    → Stories as GitLab issues
+5. speckit.plan, speckit.tasks         → Plan and generate tasks
+6. speckit.gitlab.tasks-to-issues      → Tasks as GitLab issues
+7. speckit.gitlab.sync                 → Pull status changes made in GitLab
 ```
 
 ## Mapping file
 
-The extension maintains a `.gitlab-mapping.yml` in the feature directory to ensure idempotency:
+The extension keeps a `.gitlab-mapping.yml` in the feature directory, so commands can be run repeatedly without creating duplicates:
 
 ```yaml
 feature: "#232 https://gitlab.example.com/group/project/-/issues/232"
@@ -128,13 +154,22 @@ tasks:
   T001: "#42 https://gitlab.example.com/group/project/-/issues/42"
 ```
 
-The `feature:` field is set by `/speckit.gitlab.feature-to-issue` (push) or `/speckit.gitlab.import-feature` (pull). Stories are automatically linked to the feature issue.
+Task lines in `tasks.md` also get a `<!-- gitlab:#42 -->` comment. The `feature:` entry is set by `speckit.gitlab.feature-to-issue` (push) or `speckit.gitlab.import-feature` (pull).
 
-This lets commands be run multiple times without creating duplicates.
+## Hooks
 
-## Hook
+- **after_tasks**: after task generation, you're asked whether to create the tasks as GitLab issues.
+- **after_implement**: after implementation, you're asked whether to close completed tasks in GitLab.
 
-After `/speckit.tasks`, you're automatically asked whether tasks should be created as GitLab issues.
+Both hooks are optional and can be turned off in `.specify/extensions.yml`.
+
+## Development
+
+```bash
+bash tests/test-helpers.sh
+```
+
+The tests cover config loading, `tasks.md`/`spec.md` parsing, and the mapping file. They run offline. `tests/`, `.github/`, and `CHANGELOG.md` are excluded from installation via `.extensionignore`.
 
 ## License
 

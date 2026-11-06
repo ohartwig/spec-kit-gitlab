@@ -1,8 +1,18 @@
+# spec-kit GitLab extension configuration
+# Created on install at .specify/extensions/gitlab/gitlab-config.yml.
+# Fill it in with /speckit.gitlab.init (or edit it by hand).
+#
+# Never put a token in this file. Authenticate glab instead:
+#   glab auth login --hostname gitlab.example.com
+# or export GITLAB_TOKEN in your shell.
+
 gitlab:
-  # URL of your self-hosted GitLab (e.g. https://gitlab.example.com)
-  url: "${GITLAB_URL}"
+  # URL of your GitLab instance (e.g. https://gitlab.example.com), no trailing slash
+  # Can be overridden with the GITLAB_URL environment variable.
+  url: ""
   # Project path (e.g. "group/project" or "group/subgroup/project")
-  project: "${GITLAB_PROJECT}"
+  # Can be overridden with the GITLAB_PROJECT environment variable.
+  project: ""
 
 labels:
   # Labels that are set automatically
@@ -12,8 +22,13 @@ labels:
   feature_label: "feature"      # Label for feature issues
 
 mapping:
-  # How tasks are mapped to GitLab fields
-  priority_to_label: true       # P1 → priority::1
-  feature_to_milestone: true    # Feature name as milestone
+  # How spec-kit artifacts are mapped to GitLab fields
+  priority_to_label: true       # Story priority P1 → label priority::1
+  feature_to_milestone: true    # Feature directory name as milestone
   feature_to_issue: true        # Create the feature as a GitLab issue
   link_tasks_to_stories: true   # Link task issues to story issues
+  task_issue_type: "task"       # GitLab type for task issues: "task" or "issue"
+
+# Local overrides (not committed, kept on extension reinstall):
+#   .specify/extensions/gitlab/gitlab-config.local.yml
+# Values there win key by key over this file.
